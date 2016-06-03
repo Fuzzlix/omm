@@ -1,0 +1,78 @@
+--- makefile for lua-5.2, lua-5.3 and modules, ...
+-- Build a lua environment for windows, where all lua versions resides side by side in one 
+-- directory tree including there modules, libraries, documentation and lua tools.
+-- It creates a "_install" folder containing all content you may want for copy 
+-- to "c:\lua" (for instance).
+-- This makefile is not intended to work on other OS than Windows.
+-- it is tested with TDM-GCC-64 (https://tdm-gcc.tdragon.net/)
+--
+if not WINDOWS then quit("We are not running on Windows?") end;
+--
+--make.tools("gnu");
+--make.tools("msc");
+--make.set_flags {OPTIMIZE="Os", STRICT=true, PREFIX="x86_64-w64-mingw32"};
+-----------------------------------------------------------------------------------------------
+--
+LUAROOT = PWD                  -- base of the lua build tree
+LUA_BIN = LUAROOT.."/_install" -- install dir
+TEMPDIR = LUAROOT.."/tmp"      -- dir for intermediate files
+--
+-----------------------------------------------------------------------------------------------
+--
+make "lua-5.2"
+make "modules"
+make "lua-5.3"
+make "modules"
+--make "tools"
+
+--[[-- This build script needs 2 patches for both lua5.2 and lua5.3. shown for lua53 (lua52 is similiar):
+
+--- D:/_Sources/LUA/lua-5.3/src/loadlib.c	Mon Nov 23 12:30:45 2015
++++ D:/_Sources/Lua4WIN/lua-5.3/src/loadlib.c	Sun Apr 24 15:47:17 2016
+@@ -456,7 +456,8 @@
+ static int searcher_Lua (lua_State *L) {
+   const char *filename;
+   const char *name = luaL_checkstring(L, 1);
+-  filename = findfile(L, name, "path", LUA_LSUBSEP);
++  filename = findfile(L, name, "path", LUA_LSUBSEP);
++  if (filename == NULL) filename = findfile(L, name, "path", "_");
+   if (filename == NULL) return 1;  /* module not found in this path */
+   return checkload(L, (luaL_loadfile(L, filename) == LUA_OK), filename);
+ }
+@@ -490,7 +491,8 @@
+ 
+ static int searcher_C (lua_State *L) {
+   const char *name = luaL_checkstring(L, 1);
+-  const char *filename = findfile(L, name, "cpath", LUA_CSUBSEP);
++  const char *filename = findfile(L, name, "cpath", LUA_CSUBSEP);
++  if (filename == NULL) filename = findfile(L, name, "cpath", "_");
+   if (filename == NULL) return 1;  /* module not found in this path */
+   return checkload(L, (loadfunc(L, filename, name) == 0), filename);
+ }
+--- D:/_Sources/LUA/lua-5.3.2/src/luaconf.h	Wed Oct 21 20:17:40 2015
++++ D:/_Sources/Lua4WIN/lua-5.3.2/src/luaconf.h	Sun Apr 24 13:25:06 2016
+@@ -174,18 +175,13 @@
+ ** path of the directory of the executable file of the current process.
+ */
+ #define LUA_LDIR	"!\\lua\\"
+-#define LUA_CDIR	"!\\"
+-#define LUA_SHRDIR	"!\\..\\share\\lua\\" LUA_VDIR "\\"
++#define LUA_CDIR	"!\\lib\\53\\"
+ #define LUA_PATH_DEFAULT  \
+ 		LUA_LDIR"?.lua;"  LUA_LDIR"?\\init.lua;" \
+-		LUA_CDIR"?.lua;"  LUA_CDIR"?\\init.lua;" \
+-		LUA_SHRDIR"?.lua;" LUA_SHRDIR"?\\init.lua;" \
+-		".\\?.lua;" ".\\?\\init.lua"
++		LUA_CDIR"?.lua;"  LUA_CDIR"?\\init.lua;" ".\\?.lua"
+ #define LUA_CPATH_DEFAULT \
+-		LUA_CDIR"?.dll;" \
+-		LUA_CDIR"..\\lib\\lua\\" LUA_VDIR "\\?.dll;" \
+-		LUA_CDIR"loadall.dll;" ".\\?.dll"
+-
++		LUA_CDIR"?53.dll;"	LUA_CDIR"?.dll;" \
++		"!\\?53.dll;"	"!\\?.dll"
+ #else			/* }{ */
+ 
+ #define LUA_ROOT	"/usr/local/"
+
+--]]--

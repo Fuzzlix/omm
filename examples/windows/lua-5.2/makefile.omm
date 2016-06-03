@@ -1,0 +1,63 @@
+--- makefile for lua-5.2
+--
+if not WINDOWS then quit("We are not running on Windows?") end;
+--
+-----------------------------------------------------------------------------------------------
+--
+LUAROOT     = LUAROOT or PWD.."/.."
+LUA_BIN     = LUA_BIN or LUAROOT.."/_install"               -- install dir
+TEMPDIR     = TEMPDIR or LUAROOT.."/tmp"                    -- dir for intermediate files
+
+local LUA_VERSION = "52"
+local LUA_IDIR    = LUA_BIN.."/include/"..LUA_VERSION -- dir for headers and static libs
+local LUA_CDIR    = LUA_BIN.."/lib/"..LUA_VERSION     -- dir for c modules
+local LUA_LDIR    = LUA_BIN.."/lua"                   -- dir for lua modules 
+local LUA_ETC_DIR = LUA_BIN.."/etc"                   -- dir for documentation, tests, etc.
+
+local lua_core = "\z
+  lapi lcode lctype ldebug ldo ldump lfunc lgc llex lmem lobject \z
+  lopcodes lparser lstate lstring ltable ltm lundump lvm lzio \z
+  lauxlib lbaselib lbitlib lcorolib ldblib liolib \z
+  lmathlib loslib lstrlib ltablib loadlib linit"
+
+local LUAICON = wresource {"lua52", src="icon", base="src", odir=TEMPDIR} -- icon resources
+local LUAICN2 = wresource {"luac52",src="icon", base="src", odir=TEMPDIR} -- icon resources
+local LUA_C   = c99 {"lua52", src="lua", base="src", odir=TEMPDIR, from="lua52:defines"}       -- lua program c source
+local LUAC_C  = c99 {"lua52", src="luac", base="src", odir=TEMPDIR, from="lua52s:defines"}     -- luac program c source
+local LIB_C   = c99 {"lua52_s", src=lua_core, base="src", odir=TEMPDIR, from="lua52s:defines"} -- static lib c source
+local DLL_C   = c99 {"lua52_d", src=lua_core, base="src", odir=TEMPDIR, from="lua52:defines"}  -- dynamic lib c source
+--
+local LUALIB  = c99.library {'lua52', odir=LUA_IDIR, inputs=LIB_C}                     -- static lua runtime lib
+local LUADLL  = c99.shared  {'lua52', odir=LUA_BIN, inputs=DLL_C}                      -- dynamic lua runtime lib
+local LUAEXE  = c99.program {'lua52', odir=LUA_BIN, inputs={LUA_C, LUAICON, LUADLL}}   -- lua executable
+local LUAC    = c99.program {'luac52', odir=LUA_BIN, inputs={LUAC_C, LUAICN2, LUALIB}} -- luac executable
+--
+local LUAINC  = file {src="lua.h lua.hpp luaconf.h lualib.h lauxlib.h", base="src", odir=LUA_IDIR}
+local LUADOC  = file {src="*", base="doc", odir=LUA_ETC_DIR.."/lua52/doc"}
+local LUAETC  = file {src="*.ico", base="etc", odir=LUA_IDIR}
+--
+local LUA = group {LUAEXE, LUAC, LUAINC, LUADOC, LUAETC}
+
+target("lua52", LUA)
+
+default(LUA)
+--
+define_need{'lua52',  -- lua52, dynamically linked libs
+  libs          = "lua52", 
+  incdir        = LUA_IDIR, 
+  defines       = "LUA_BUILD_AS_DLL LUA_COMPAT_MODULE", 
+  libdir        = LUA_BIN .. " " .. LUA_IDIR,
+  prerequisites = "lua52"
+};
+
+define_need{'lua52s', -- lua52, statically linked libs
+  libs          = "lua52",
+  incdir        = LUA_IDIR, 
+  defines       = "LUA_COMPAT_MODULE", 
+  libdir        = LUA_IDIR,
+  prerequisites = "lua52"
+};
+--
+make.Needs "lua = lua52"   -- need alias.
+make.Needs "luas = lua52s" -- need alias.
+
