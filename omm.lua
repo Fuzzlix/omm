@@ -3453,16 +3453,13 @@ package.preload["tc_repositories"] = function(...) --TODO
   function Tool:action_checkout(...)
     local par = self:checkParam(...);
     local dir = par[1] or par.odir;
-    if not type(dir) == "string" then 
-      quitMF("no valid odir given.");
-    end;
+    if type(dir) ~= "string" then quitMF("no valid odir given."); end;
+    local fnx = (function(a,b)return a.."."..b;end)(fn_splitpath(fn_forceExt(dir,".svn")));
     local url =par[2] or par.src;
-    if not type(url) == "string" then 
-      quitMF("no valid url given.");
-    end;
-    if fn.exists(dir) and not fn.isDir(dir) then
-      quitMF("cant overwrite '%s'.", dir);
-    end;
+    if type(url) ~= "string" then quitMF("no valid url given."); end;
+    if fn.exists(dir) and not fn.isDir(dir) then quitMF("cant overwrite '%s'.", dir); end;
+    local filetime_delta = os.time() - fn_filetime(fnx);
+    if filetime_delta < 86400 then return; end; -- checkout at least 24 hours old ?
     local cmd = "svn checkout " .. url .. " " .. dir;
     if Make.options.verbose then
       print(cmd);
@@ -3473,8 +3470,7 @@ package.preload["tc_repositories"] = function(...) --TODO
     if not utils.execute(cmd, Make.options.quiet) then
       quitMF("svn checkout failed.");
     else 
-      local fn = (function(a,b)return a.."."..b;end)(fn_splitpath(fn_forceExt(dir,".svn")))
-      local f = io.open(fn,"w+");
+      local f = io.open(fnx,"w+");
       if f then
         f:write(("%s checked out with:\n%s ."):format(dir, cmd));
         f:close();
