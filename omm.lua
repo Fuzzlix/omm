@@ -350,16 +350,6 @@ package.preload["33log"]    = function(...)
     end;
   end;
   
-  local function class_include(self, include)
-    if rawget(self,'__classname') == nil then error('Mixins can only be used on classes.', 2) end;
-    for k, v in pairs(include) do
-      if (type(v) == "function") and (self[k] == nil) then 
-        self[k] = v;
-      end;
-    end;
-    return self;
-  end;
-  
   local function class_new(self, ...) 
     if rawget(self,'__classname') == nil then error('new() should be called from a class.', 2) end;
     local instance = setmetatable({}, self);
@@ -423,7 +413,6 @@ package.preload["33log"]    = function(...)
       __tostring   = class_tostring;     
       __dumpdepth  = 1;
       __init       = class_init;         
-      include      = class_include;
       new          = class_new;
       singleton    = class_singleton;
       is_singleton = class_is_singleton;
@@ -887,7 +876,7 @@ local attributes, touch, mkdir = lfs.attributes, lfs.touch, lfs.mkdir;
 --
 --
 local concat, insert, remove = table.concat, table.insert, table.remove;
-local rawget, type, select, ipairs, pairs = rawget, type, select, ipairs, pairs;
+local type, select, ipairs, pairs = type, select, ipairs, pairs;
 local max       = math.max;
 --
 local DIRSEP    = package.config:sub(1, 1);
@@ -899,7 +888,7 @@ local Make;
 local warning, warningMF, quit, quitMF, dprint, chdir, choose, pick, split, 
       split2, collect, shell, execute, roTable, pairsByKeys, subst, substitute, 
       flatten_tbl, luaVersion, 
-      ENV, PWD;
+      ENV, PWD, LUAVER, NUMCORES;
 do
   local update_pwd;
   --
@@ -1491,9 +1480,7 @@ do
   
 end;
 --
------ [os & hardware detection ] ===============================================
-local LUAVER, NUMCORES;
-do  
+do -- [os & hardware detection ] =============================================== 
   --
   --[[--------------------------------------------------------------------
   
@@ -2187,7 +2174,7 @@ do
   
   clTempFile.needsBuild = function(self)
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
-      quit("make(): file '%s' does not exist.", treeNode[1], 0); 
+      quit("make(): file '%s' does not exist.", self[1], 0); 
     end;
     local dirty, modtime = self:presDirty();
     local time = self:filetime() or -1;
@@ -2321,13 +2308,11 @@ do
       -- "alias = need" ?
       if p1:find("=") then
         local alias, need = p1:match("^(%w+)%s*=%s*(%w+)$");
-        if type(alias) ~= "string" then quitMF("needs.alias(): parameters needs to be strings."); end;
-        if type(need)  ~= "string" then quitMF("needs.alias(): parameters needs to be strings."); end;
         local a, n = self:find(alias), self:find(need);
         if not n then quitMF("needs.alias(): no need '%s' defined."); end;
-        if not n[1] == alias then quitMF("needs.alias(): '%s' is already defined as normal need."); end;
+        if a and (a[1] == alias) then quitMF("needs.alias(): '%s' is already defined as normal need.", alias); end;
         self.__dir[alias] = n;
-        return n
+        return n;
       end;
       -- "need:field" ?
       if p1:find(":") then
@@ -3173,9 +3158,7 @@ package.preload["tc_msc"]          = function(...) --TODO
   local Make = require "Make";
   --
   local Toolchains = Make.Tools;
-  local utils      = Make.utils;
   local fn         = Make.path;
-  local choose     = utils.choose;
   local warning    = Make.warning;
   --
   -- environmet variables fit gnu tools?
