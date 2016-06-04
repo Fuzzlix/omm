@@ -3254,7 +3254,7 @@ package.preload["tc_msc"]          = function(...) --TODO
   Tool:add_library();
   --
   
-  return;
+  return Toolchain;
   
 end;
 
@@ -3362,6 +3362,7 @@ package.preload["tc_gnu"]          = function(...)
   Tool:add_shared();
   Tool:add_library();
   --
+  return Toolchain;
 end;
 
 package.preload["tc_files"]        = function(...) 
@@ -3429,6 +3430,7 @@ package.preload["tc_files"]        = function(...)
   end;
   Tool:add_group();
   --
+  return tc;
 end;
 
 package.preload["tc_repositories"] = function(...) --TODO
@@ -3480,6 +3482,7 @@ package.preload["tc_repositories"] = function(...) --TODO
   end;
   Tool:add_action("checkout");
   --
+  return tc;
 end;
 
 package.preload["tc_targets"]      = function(...)
@@ -3502,6 +3505,7 @@ package.preload["tc_targets"]      = function(...)
   t = Targets:new_target("CLEAN",{action = action_CLEAN});
   t.dirty = true; -- allways execute
   --
+  return nil; -- no new toolchain to return.
 end;
 --
 -- [main] ======================================================================
