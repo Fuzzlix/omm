@@ -18,7 +18,7 @@ local LUA_LDIR   = LUA_BIN.."/lua"
 
 LUAMODS_DOC_COPIED = LUAMODS_DOC_COPIED
 
---svn.checkout{"lfs", "https://github.com/keplerproject/luafilesystem/trunk"}
+svn.checkout{"lfs", "https://github.com/keplerproject/luafilesystem/trunk"}
 if make.path.isDir("lfs") then -- module lfs
   --  [[ 
   local DOCDIR  = MODULES .. "/lfs/doc/us";
@@ -39,7 +39,7 @@ if make.path.isDir("lfs") then -- module lfs
   --]]
 end;
 
---svn.checkout{"lpeg", "https://github.com/LuaDist/lpeg/trunk"}
+--svn.checkout{"lpeg", "https://github.com/LuaDist/lpeg/trunk"} -- outdated repository!
 if make.path.isDir("lpeg") then -- module lpeg
   -- [[
   local MODULES = MODULES.."/lpeg"
@@ -63,7 +63,7 @@ if make.path.isDir("lpeg") then -- module lpeg
   --]]
 end;
 
---svn.checkout{"winapi", "https://github.com/stevedonovan/winapi/trunk"}
+svn.checkout{"winapi", "https://github.com/stevedonovan/winapi/trunk"}
 if make.path.isDir("winapi") then -- module winapi
   -- [[
   local MODULES = MODULES.."/winapi"
@@ -84,7 +84,7 @@ if make.path.isDir("winapi") then -- module winapi
   --]]
 end;
 
---svn.checkout{"luasocket", "https://github.com/diegonehab/luasocket/trunk"}
+svn.checkout{"luasocket", "https://github.com/diegonehab/luasocket/trunk"}
 if make.path.isDir("luasocket") then -- module luasocket
   -- [[
   local MODULE  = MODULES.."/luasocket"
@@ -118,7 +118,7 @@ if make.path.isDir("luasocket") then -- module luasocket
   --]]
 end; 
 
---svn.checkout{"lanes", "https://github.com/LuaLanes/lanes/trunk"}
+svn.checkout{"lanes", "https://github.com/LuaLanes/lanes/trunk"}
 if make.path.isDir("lanes") then -- module lanes
   -- [[
   local MODULE  = MODULES.."/lanes"
@@ -144,7 +144,7 @@ if make.path.isDir("lanes") then -- module lanes
   --]]
 end; 
 
---svn.checkout{"penlight", "https://github.com/stevedonovan/Penlight/trunk"}
+svn.checkout{"penlight", "https://github.com/stevedonovan/Penlight/trunk"}
 if make.path.isDir("penlight") then -- module penlight
   if not LUAMODS_DOC_COPIED then
     -- [[ TODO: generate docs

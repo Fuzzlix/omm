@@ -110,7 +110,8 @@ Options:
   -n, --just-print,           Don't actually run any command; just print them.
   -s, --nostrict              Don't compile strictly.
   -D, --define=DEFINES[,...]  DEFINEs for compilation. eg: "build_mode=debug,BUILD_DLL"
-  
+  -m, --mode=32|64            Compile 32/64 bit targets.
+
   -I, --import-needs=[FILE]   Read needs from needs definition file.
   -E, --export-needs=[FILE]   Append new needs to needs definition file.
   -N, --use-needs=[FILE]      Like '-I -E'.
@@ -1871,6 +1872,16 @@ do -- [Make] ===================================================================
       if Make.options.toolchains then   -- -t, --toolchains
         Make.Tools:load(split(Make.options.toolchains,","));
       end;
+      if Make.options.mode then         -- -m, --mode=32|64
+        local mode = Make.options.mode;
+        if type(mode) ~= "string" then mode = ""; end; -- trigger error
+        mode = mode:match("^[mM]?(32)$") or mode:match("^[mM]?(64)$")
+        if mode then 
+          Make["setM"..mode]();
+        else
+          quit("make(): commandline parameter error in --mode", 0);
+        end;
+      end;
       if Make.options.use_needs then    -- -N, --use-needs=[FILE] 
         if type(Make.options.use_needs) == "boolean" then
           Make.options.use_needs = defaultNeedsFilename;
@@ -1911,18 +1922,8 @@ do -- [Make] ===================================================================
       end;
       self.target = target;
       makefile = makefile or MAKEFILENAME;
-      -- Load preloaded toolchains in alphabetical order
-      -- This way tollchain "gnu" becomes loaded before "msc".
-      -- TODO: toolchain "msc" is still alpha/untested.
-      -- Someone may prefer to load the toolchains in a explicit order.
-      -- To Do so, you can write..
-      --   `Make.Tools:load("gnu msc files targets repositories");`
-      -- .. and remove the for loop below.
-      for n in pairsByKeys(package.preload) do
-        if n:find("^tc_") then
-          Make.Tools:load(n);
-        end;
-      end;
+      -- Load preloaded toolchains.
+      Make.Tools:load("gnu msc files targets repositories");
       --
     else
       makefile = cmd[1];
@@ -1935,7 +1936,6 @@ do -- [Make] ===================================================================
     --
     if MAKELEVEL == 0 then runMake(); end; -- do the job ...
   end;
-  
   --
   Make   = clMake:singleton();
   --
@@ -1950,6 +1950,20 @@ do -- [flag handling] ==========================================================
   local function setFlag(n, v)
     clMakeScript[n] = v; 
   end;
+  
+  local function setRO(n, v)
+    quit("set %s: read only flags can't be set.", n, 0);
+  end;
+  
+  local function setM32()
+    if clMakeScript.M64 then quit("setM32(): M64 already set.", 0) end;
+    clMakeScript.M32 = true; 
+  end;
+  
+  local function setM64(n, v)
+    if clMakeScript.M32 then quit("setM64(): M32 already set.", 0) end;
+    clMakeScript.M64 = true; 
+  end;
   --
   local flagtable = {
     CC       = setFlag, 
@@ -1959,7 +1973,8 @@ do -- [flag handling] ==========================================================
     DEBUG    = setFlag,
     PREFIX   = setFlag,
     SUFFIX   = setFlag,
-    --M32     = setFlag, --TODO
+    M32      = setRO,
+    M64      = setRO,
     --PLAT    = setFlag, --TODO ??
     NODEPS   = setFlag, --TODO
   };
@@ -1969,13 +1984,16 @@ do -- [flag handling] ==========================================================
     if type(params) ~= "table" then quitMF("set_flags() parameter needs to be a table/list."); end;
     --if make.MAKELEVEL ~= 1   then warning("set_flags() in nested makefiles ignored."); return; end;
     for n, v in pairs(params) do
-      if flagtable[n] then flagtable[n](n, v);
-      else quitMF("set_flags() unknown flag '%s'.", n); end; 
+      if flagtable[n] then 
+        flagtable[n](n, v);
+      else 
+        quitMF("set_flags() unknown flag '%s'.", n); 
+      end; 
     end;  
   end;
   --
   local function get_flag(flag)
-    if flagtable[flag] == setFlag then
+    if flagtable[flag] then
       return clMakeScript[flag];
     else
       quitMF("get_flag() unknown flag '%s'.", flag);
@@ -1984,6 +2002,8 @@ do -- [flag handling] ==========================================================
   --
   clMake.set_flags = set_flags;
   clMake.get_flag  = get_flag;
+  clMake.setM32    = setM32;
+  clMake.setM64    = setM64;
   --
   set_flags{ -- default values
     OPTIMIZE  = "O2", 
@@ -3130,7 +3150,10 @@ do -- [tools] ==================================================================
         if name:find("^tc_") or name:find("^"..TOOLCHAIN_PREFIX) then  
           require(name);
         else 
-          local _ = pcall(require, TOOLCHAIN_PREFIX .. name) or 
+          local mode = (clMakeScript.M32 and "32") or (clMakeScript.M64 and "64") or "";
+          local _ = pcall(require, TOOLCHAIN_PREFIX .. name .. mode) or 
+                    pcall(require, TOOLCHAIN_PREFIX .. name) or 
+                    pcall(require, "tc_" .. name .. mode) or 
                     pcall(require, "tc_" .. name) or 
                     quit("* Cant find Toolchain '%s'.", name, 0);
         end;
@@ -3146,6 +3169,10 @@ do -- [tools] ==================================================================
   --
   Tools = clTools:singleton();
   clMake.Tools = Tools;
+  
+  clMake.toolchain = function(tchnname)
+    Tools:load(tchnname);
+  end;
   --
 end;
 --
@@ -3362,6 +3389,64 @@ package.preload["tc_gnu"]          = function(...)
   Tool:add_shared();
   Tool:add_library();
   --
+  return Toolchain;
+end;
+
+package.preload["tc_gnu32"]        = function(...) 
+  --
+  local Toolchain  = require "tc_gnu";
+  local Make       = require "Make";
+  --
+  local Toolchains = Make.Tools;
+  local utils      = Make.utils;
+  local fn         = Make.path;
+  local choose     = utils.choose;
+  local warning    = Make.warning;
+  --
+  local WINDOWS    = Make.WINDOWS;
+  --
+  for tool in Toolchain() do
+    for n, v in pairs(tool) do
+      if type(n) == "string" and n:find("^command") then
+        if v:find("^windres") then
+          tool[n] = v:gsub("^windres %$OPTIONS","windres -F pe-i386 $OPTIONS");
+        else
+          tool[n] = v:gsub("%$OPTIONS", "-m32 $OPTIONS");
+        end;
+      end;
+    end;
+  end;
+  --
+  Make.setM32();
+  return Toolchain;
+end;
+
+package.preload["tc_gnu64"]        = function(...) 
+  --
+  local Toolchain  = require "tc_gnu";
+  local Make       = require "Make";
+  --
+  local Toolchains = Make.Tools;
+  local utils      = Make.utils;
+  local fn         = Make.path;
+  local choose     = utils.choose;
+  local warning    = Make.warning;
+  --
+  local WINDOWS    = Make.WINDOWS;
+  --
+  for tool in Toolchain() do
+    for n, v in pairs(tool) do
+      if type(n) == "string" and n:find("^command") then
+        if v:find("^windres") then
+          tool[n] = v:gsub("^windres %$OPTIONS","windres -F pe-x86-64 $OPTIONS");
+        else
+          tool[n] = v:gsub("%$OPTIONS", "-m64 $OPTIONS");
+        end;
+      end;
+    end;
+  end;
+  --
+  Make.setM64();
   return Toolchain;
 end;
 
