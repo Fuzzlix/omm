@@ -61,8 +61,6 @@ SOFTWARE.
     - default/fallback needs?
   - Need aliases (done)
 
-- M32/M64 handling.
-
 - msc toolchain.
   - It is a untested skeleton right now.
 
@@ -86,8 +84,6 @@ SOFTWARE.
   - Maybe better implement a "repository" tool, that handles svn, git, zip, .. downloads
   
 - correct silent/normal/verbose message print (doublecheck)
-
-- make compiler warnings to errors? How to implement this? commandline? flag?
 
 - create a documentation.
 
@@ -1929,8 +1925,18 @@ do -- [Make] ===================================================================
       makefile = cmd[1];
     end;
     --
-    if fn_isDir(makefile) then makefile = fn_join(makefile, MAKEFILENAME); end;
-    if not fn_isFile(makefile) then quit("make(): cant find '%s'.", makefile, 0); end;
+    if not fn_isFile(makefile) then 
+      if not fn_isFile(makefile..".omm") then 
+        if fn_isDir(makefile) then 
+          makefile = fn_join(makefile, MAKEFILENAME); 
+        end;
+        if not fn_isFile(makefile) then 
+          quit("make(): cant find '%s'.", makefile, 0); 
+        end;
+      else
+        makefile = makefile..".omm";
+      end;
+    end;
     --
     MakeScript(makefile);
     --
@@ -1951,7 +1957,7 @@ do -- [flag handling] ==========================================================
     clMakeScript[n] = v; 
   end;
   
-  local function setRO(n, v)
+  local function setRO(n)
     quit("set %s: read only flags can't be set.", n, 0);
   end;
   
@@ -1960,7 +1966,7 @@ do -- [flag handling] ==========================================================
     clMakeScript.M32 = true; 
   end;
   
-  local function setM64(n, v)
+  local function setM64()
     if clMakeScript.M32 then quit("setM64(): M32 already set.", 0) end;
     clMakeScript.M64 = true; 
   end;
@@ -1971,8 +1977,8 @@ do -- [flag handling] ==========================================================
     OPTIMIZE = setFlag, 
     STRICT   = setFlag,
     DEBUG    = setFlag,
-    PREFIX   = setFlag,
-    SUFFIX   = setFlag,
+    PREFIX   = setFlag, --adress a cross compilers
+    SUFFIX   = setFlag, --adress a cross compilers treading model
     M32      = setRO,
     M64      = setRO,
     --PLAT    = setFlag, --TODO ??
@@ -2145,7 +2151,6 @@ do
   };
   
   clSourceFile.needsBuild = function(self)
-    --return false, self:filetime();
     if not self:exists() then
       quit("make(): sourcefile '%s' does not exist.", self[1], 0); 
     end;
@@ -2154,7 +2159,6 @@ do
       dirty, modtime = self.deps:needsBuild();
     end;
     self.dirty = self.dirty or dirty or filetime < modtime;
-    --self._time = modtime;
     --dprint(("clSourceFile.needsBuild():    %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, max(filetime, modtime);
   end;
@@ -2709,6 +2713,12 @@ do -- [tools] ==================================================================
   };
   
   -- utilities
+  function clTool:allParamsEaten(par)
+    for n in pairs(par) do
+      quitMF("%s(): parameter '%s' not processed.", self[1], n);
+    end;
+  end;
+
   function clTool:collect_defines(TreeNode)
     local res = class.StrList:new();
     if TreeNode.defines then 
@@ -2737,9 +2747,13 @@ do -- [tools] ==================================================================
 
   function clTool:process_OPTIONS(TreeNode)
     local options = class.StrList:new();
+    -- for non debug builds: strip debug infos from executables and dynlibs.
     if not Make.get_flag("DEBUG") and (TreeNode.type == "prog" or TreeNode.type == "dlib") then
       options:add("-s");
     end;
+    -- insert cflags.
+    options:add(TreeNode.cflags:concat())
+    -- insert include dirs
     for d in TreeNode.incdir() do
       options:add("-I"..fn_canonical(d));
     end;
@@ -2836,6 +2850,7 @@ do -- [tools] ==================================================================
   function clTool:getSources(par)
     local sources = clTargetList:new{__allowed = "SourceFile"};
     sources.prerequisites = clTargetList:new();
+    sources.cflags  = class.StrList:new();
     sources.defines = class.StrList:new();
     sources.incdir  = class.StrList:new();
     sources.libdir  = class.StrList:new();
@@ -2870,6 +2885,7 @@ do -- [tools] ==================================================================
           end;
         end;
         par.src = nil;
+        par.base = nil;
       end;
     end;
     -- inputs = ...
@@ -2882,6 +2898,10 @@ do -- [tools] ==================================================================
     if par.libs    then
       sources.libs:add(par.libs);
       par.libs = nil;
+    end;
+    if par.cflags  then
+      sources.cflags:add(par.cflags);
+      par.cflags = nil;
     end;
     -- needs = ...
     if par.needs   then
@@ -2972,14 +2992,19 @@ do -- [tools] ==================================================================
         of.type    = "obj";
         of.base    = sources.base;
         of.defines = sources.defines;
+        of.cflags  = sources.cflags;
         of.incdir  = sources.incdir;
         of.libdir  = sources.libdir;
         of.libs    = sources.libs;
         of.needs   = sources.needs;
         of.from    = sources.from;
       end;
+      if par[1] ~= nil then remove(par, 1); end;
+      par.odir = nil;
+      self:allParamsEaten(par);
       return result;
     else
+      self:allParamsEaten(par);
       return sources;
     end;
   end;
@@ -2990,13 +3015,17 @@ do -- [tools] ==================================================================
     local target = clTargetFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.EXE_EXT));
     target.deps    = sources;
     target.defines = sources.defines;
+    target.cflags  = sources.cflags;
     target.incdir  = sources.incdir;
     target.libdir  = sources.libdir;
     target.libs    = sources.libs;
     target.needs   = sources.needs;
     target.from    = sources.from;
     target.tool    = self;
-    target.type    = "prog"
+    target.type    = "prog";
+    if par[1] ~= nil then remove(par, 1); end;
+    par.odir = nil;
+    self:allParamsEaten(par);
     return target;
   end;
   
@@ -3006,13 +3035,17 @@ do -- [tools] ==================================================================
     local target = clTargetFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.DLL_EXT));
     target.deps = sources;
     target.defines = sources.defines;
+    target.cflags  = sources.cflags;
     target.incdir  = sources.incdir;
     target.libdir  = sources.libdir;
     target.libs    = sources.libs;
     target.needs   = sources.needs;
     target.from    = sources.from;
     target.tool    = self;
-    target.type    = "dlib"
+    target.type    = "dlib";
+    if par[1] ~= nil then remove(par, 1); end;
+    par.odir = nil;
+    self:allParamsEaten(par);
     return target;
   end;
   
@@ -3028,7 +3061,10 @@ do -- [tools] ==================================================================
     target.needs   = sources.needs;
     target.from    = sources.from;
     target.tool    = self;
-    target.type    = "slib"
+    target.type    = "slib";
+    if par[1] ~= nil then remove(par, 1); end;
+    par.odir = nil;
+    self:allParamsEaten(par);
     return target;
   end;
   --
@@ -3397,14 +3433,6 @@ package.preload["tc_gnu32"]        = function(...)
   local Toolchain  = require "tc_gnu";
   local Make       = require "Make";
   --
-  local Toolchains = Make.Tools;
-  local utils      = Make.utils;
-  local fn         = Make.path;
-  local choose     = utils.choose;
-  local warning    = Make.warning;
-  --
-  local WINDOWS    = Make.WINDOWS;
-  --
   for tool in Toolchain() do
     for n, v in pairs(tool) do
       if type(n) == "string" and n:find("^command") then
@@ -3425,14 +3453,6 @@ package.preload["tc_gnu64"]        = function(...)
   --
   local Toolchain  = require "tc_gnu";
   local Make       = require "Make";
-  --
-  local Toolchains = Make.Tools;
-  local utils      = Make.utils;
-  local fn         = Make.path;
-  local choose     = utils.choose;
-  local warning    = Make.warning;
-  --
-  local WINDOWS    = Make.WINDOWS;
   --
   for tool in Toolchain() do
     for n, v in pairs(tool) do
@@ -3511,7 +3531,9 @@ package.preload["tc_files"]        = function(...)
       end;
       par.inputs = inputs;
     end;
-    return self:getSources(par);
+    local res = self:getSources(par);
+    self:allParamsEaten(par);
+    return res;
   end;
   Tool:add_group();
   --

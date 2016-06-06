@@ -214,7 +214,7 @@ For all dirty treenodes the target(s) depend on:
 There are 2 different pass-3 implementations:  
 
 * standard/ordered: (-j)  
-  Something similiar to [lake][1]. Only files
+  Something similiar to [lake][]. Only files
   in one targetlist can be built at the same time. The job queue
   becomes flushed after each treenode.
 * quick/unordered: (-J)  
@@ -296,8 +296,6 @@ debug output when using '-J':
         - What is a good syntax for?
         - default/fallback needs?
 
-- M32/M64 handling.
-
 - msc toolchain.
     - It is a poor tested skeleton right now.
 
@@ -321,8 +319,6 @@ debug output when using '-J':
   (Maybe better implement a "repository" _tool_, that handles svn, git, zip, .. downloads)
   
 - correct silent/normal/verbose message print (doublecheck)
-
-- make compiler warnings to errors? How to implement this? commandline? flag?
 
 - create a documentation.
 
