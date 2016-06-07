@@ -1,3 +1,4 @@
+ENV.XXX="blubb"
 --- makefile for lua-5.2, lua-5.3 and modules, ...
 -- Build a lua environment for windows, where all lua versions resides side by side in one 
 -- directory tree including there modules, libraries, documentation and lua tools.
@@ -8,10 +9,13 @@
 --
 if not WINDOWS then quit("We are not running on Windows?") end;
 --
+-- Adress 32/64 bit targets directly.
+-- not all modules compile in 64bit mode, so stick on 32bit build for now.
 make.toolchain "gnu32"; -- compile to 32bit executables. (or use -m32 commandline parameter)
 --make.toolchain "gnu64"; -- compile to 64bit executables. (or use -m64 commandline parameter)
 --make.toolchain "msc";
---make.set_flags {OPTIMIZE="Os", STRICT=true, PREFIX="x86_64-w64-mingw32"};
+--
+--make.set_flags {OPTIMIZE="Os", NODEPS=true, PREFIX="x86_64-w64-mingw32"};
 -----------------------------------------------------------------------------------------------
 --
 LUAROOT = PWD                  -- base of the lua build tree

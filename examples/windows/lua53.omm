@@ -32,8 +32,8 @@ local LUAC_C  = c99 {"lua53", src="luac", base=LUA_SRC_DIR, odir=TEMPDIR, from="
 local LIB_C   = c99 {"lua53_s", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua53s:defines", cflags=CFLAGS} -- static lib c source
 local DLL_C   = c99 {"lua53_d", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua53:defines", cflags=CFLAGS}  -- dynamic lib c source
 --
-local LUALIB  = c99.library {'lua53', odir=LUA_IDIR, inputs=LIB_C, cflags=CFLAGS}                     -- static lua runtime lib
-local LUADLL  = c99.shared  {'lua53', odir=LUA_BIN, inputs=DLL_C, cflags=CFLAGS}                      -- dynamic lua runtime lib
+local LUALIB  = c99.library {'lua53', odir=LUA_IDIR, inputs=LIB_C}                     -- static lua runtime lib
+local LUADLL  = c99.shared  {'lua53', odir=LUA_BIN, inputs=DLL_C}                      -- dynamic lua runtime lib
 local LUAEXE  = c99.program {'lua53', odir=LUA_BIN, inputs={LUA_C, LUAICON, LUADLL}}   -- lua executable
 local LUAC    = c99.program {'luac53', odir=LUA_BIN, inputs={LUAC_C, LUAICN2, LUALIB}} -- luac executable
 --
@@ -50,7 +50,7 @@ default(LUA)
 define_need{'lua53',  -- lua53, dynamically linked libs
   libs          = "lua53", 
   incdir        = LUA_IDIR, 
-  defines       = "LUA_BUILD_AS_DLL LUA_COMPAT_MODULE", 
+  defines       = "LUA_BUILD_AS_DLL", 
   libdir        = LUA_BIN .. " " .. LUA_IDIR,
   prerequisites = "lua53"
 };
@@ -58,7 +58,7 @@ define_need{'lua53',  -- lua53, dynamically linked libs
 define_need{'lua53s', -- lua53, statically linked libs
   libs          = "lua53",
   incdir        = LUA_IDIR, 
-  defines       = "LUA_COMPAT_MODULE", 
+  --defines       = "LUA_COMPAT_MODULE", 
   libdir        = LUA_IDIR,
   prerequisites = "lua53"
 };
