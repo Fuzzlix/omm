@@ -98,7 +98,7 @@ omm 0.1-alpha
  A lua based extensible build engine.
 
 Usage: omm [options] [target[,...]]
- 
+
 Options:
 
   -b, --always-make           Unconditionally make all targets.
@@ -111,14 +111,12 @@ Options:
   -I, --import-needs=[FILE]   Read needs from needs definition file.
   -E, --export-needs=[FILE]   Append new needs to needs definition file.
   -N, --use-needs=[FILE]      Like '-I -E'.
-  
-  -j, --jobs=[N]              Run N jobs parallel (default: # of cores)
-  -J, --fastjobs=[N]          Like '-j'. Faster but unordered job execution.
-  
+
   -v, --verbose               Be verbose. print commands executed, ...
   -q, --quiet                 Don't echo commands executed
   -w, --print-warnings        Print some diagnostic warnings.
-  
+
+  -j, --jobs=[N]              Run N jobs parallel (default: # of cores)
   -t, --toolchains=NAME[,...] Preload a Toolchain. This toolchain's tools may supersede
                               tools from other toolchains.
       --version               Display version information, then exit
@@ -127,8 +125,8 @@ Options:
 special targets:
  * clean    delete all intermediate files.
  * CLEAN    delete all intermediate and result files.
- 
-Please report bugs at u.sch.zw@gmx.de
+
+Please report bugs to u.sch.zw@gmx.de
 ]=];
 --
 --_DEBUG = true; -- enable some debugging output. see: dprint()
@@ -871,7 +869,6 @@ local class    = require "33log";
 local lfs      = require "lfs";
 local attributes, touch, mkdir = lfs.attributes, lfs.touch, lfs.mkdir;
 --
---
 local concat, insert, remove = table.concat, table.insert, table.remove;
 local type, select, ipairs, pairs = type, select, ipairs, pairs;
 local max       = math.max;
@@ -885,8 +882,18 @@ local Make;
 local warning, warningMF, quit, quitMF, dprint, chdir, choose, pick, split, 
       split2, collect, shell, execute, roTable, pairsByKeys, subst, substitute, 
       flatten_tbl, luaVersion, 
+      winapi, posix,
       ENV, PWD, LUAVER, NUMCORES;
 do
+  local ok;
+  if WINDOWS then
+    ok, winapi = pcall(require, "winapi");
+    if not ok then winapi = nil; end;
+  else
+    ok, posix = pcall(require, "posix");
+    if not ok then posix = nil; end;
+  end;
+  --
   local update_pwd;
   --
   local dir_stack = {};
@@ -1053,7 +1060,7 @@ do
         return os.getenv(key)
       end;
       __newindex = function(self, key, value)
-        local M = require("winapi") or require("posix") or quitMF("ENV[]: need winapi/posix for environment writes.", 2);
+        local M = winapi or posix or quitMF("ENV[]: need winapi/posix for environment writes.");
         M.setenv(key, value);
       end;
     }
@@ -1527,7 +1534,7 @@ do -- [os & hardware detection ] ===============================================
   end;
   NUMCORES = getCores();
   --
-  dprint("Running on %s. %s cores detected.",  LUAVER, NUMCORES);
+  dprint("  Running on %s\t %s cores detected.",  LUAVER, NUMCORES);
   --
 end;
 --
@@ -1563,19 +1570,21 @@ do -- [error handling] =========================================================
   function quit(reason, ...)
     reason = reason or '?';
     reason = reason:format(...);
-    local idx = select("#", ...);
-    local lvl = (idx == 0) and 1 or select(idx, ...);
-    if type(lvl) ~= "number" then 
-      lvl = 2; 
-    else
-      lvl = lvl + 1;
+    if _DEBUG then
+      local idx = select("#", ...);
+      local lvl = (idx == 0) and 1 or select(idx, ...);
+      if type(lvl) ~= "number" then 
+        lvl = 2; 
+      else
+        lvl = lvl + 1;
+      end;
+      local sFileLine = "";
+      if lvl > 1 then
+        local errtbl = debug.getinfo(lvl);
+        sFileLine = ("%s:%1.0d: - "):format(fn_canonical(fn_abs(errtbl.short_src)), errtbl.currentline);
+      end;
+      reason = sFileLine .. reason;
     end;
-    local sFileLine = "";
-    if lvl > 1 then
-      local errtbl = debug.getinfo(lvl);
-      sFileLine = ("%s:%1.0d: - "):format(fn_canonical(fn_abs(errtbl.short_src)), errtbl.currentline);
-    end;
-    reason = sFileLine .. reason;
     io.stderr:write(reason, '\n');
     os.exit(1);
   end;
@@ -1626,7 +1635,6 @@ do
   
   job_execute = execute_wrapper;
   jobs_clear  = function() end;
-  local found_threads, winapi, posix;
   local n_threads, n_threads_forced = 1, false;
   local Processes  = class.List:new();
   local Outputs    = class.List:new();
@@ -1635,8 +1643,7 @@ do
   local job_start; -- FORWARD(cmd)
   local jobs_wait; -- FORWARD()
   if WINDOWS then
-    found_threads, winapi = pcall(require, 'winapi')
-    if found_threads then 
+    if winapi then 
       local comspec = ENV.COMSPEC .. ' /c ';
       --
       function spawn(cmd)
@@ -1656,8 +1663,7 @@ do
       --
     end;
   else
-    found_threads, posix = pcall(require, 'posix')
-    if found_threads then
+    if posix then
       --
       function spawn(cmd)
         local cpid = posix.fork()
@@ -1680,8 +1686,8 @@ do
       --
     end;
   end;
-  if found_threads then
-    
+  if winapi or posix then
+
     function job_start(cmd, callback)
       local cmdline, tmpfile = command_line(cmd)
       local p, r = spawn(cmdline)
@@ -1735,7 +1741,7 @@ do
   concurrent_jobs = function(nj)
     local toi = math.tointeger or tonumber;
     nj = toi(nj);
-    if not found_threads then return nil, "concurrent_jobs(): no threading available. winapi/posix needed." end;
+    if not winapi or posix then return nil, "concurrent_jobs(): no threading available. winapi/posix needed." end;
     if type(nj) ~= 'number' then return nil, "concurrent_jobs(): number of jobs must be a integer" end;
     if not n_threads_forced then
       n_threads = nj;
@@ -1850,11 +1856,6 @@ do -- [Make] ===================================================================
       target = cmd[1];
       --
       local defaultNeedsFilename = fn_join(fn_splitpath(arg[0]), "needs.omm"); --TODO: linux: default "~/needs.omm"
-      if clMake.options.fastjobs then   -- -J, --fastjobs
-        if tonumber(clMake.options.fastjobs) or not tonumber(clMake.options.jobs) then
-          clMake.options.jobs = clMake.options.fastjobs;
-        end;
-      end;
       if clMake.options.jobs then       -- -j, --jobs
         if clMake.options.jobs == true then 
           clMake.options.jobs = NUMCORES; 
@@ -1943,7 +1944,8 @@ do -- [Make] ===================================================================
     if MAKELEVEL == 0 then runMake(); end; -- do the job ...
   end;
   --
-  Make   = clMake:singleton();
+  Make       = clMake:singleton();
+  Make.USAGE = USAGE;
   --
   package.preload["Make"]  = function(...) return Make; end;
   --
@@ -1961,15 +1963,6 @@ do -- [flag handling] ==========================================================
     quit("set %s: read only flags can't be set.", n, 0);
   end;
   
-  local function setM32()
-    if clMakeScript.M64 then quit("setM32(): M64 already set.", 0) end;
-    clMakeScript.M32 = true; 
-  end;
-  
-  local function setM64()
-    if clMakeScript.M32 then quit("setM64(): M32 already set.", 0) end;
-    clMakeScript.M64 = true; 
-  end;
   --
   local flagtable = {
     CC       = setFlag, 
@@ -1982,7 +1975,7 @@ do -- [flag handling] ==========================================================
     M32      = setRO,
     M64      = setRO,
     --PLAT    = setFlag, --TODO ??
-    NODEPS   = setFlag, --TODO
+    NODEPS   = setFlag,
   };
   --
   local function set_flags(params, ...)
@@ -2008,8 +2001,6 @@ do -- [flag handling] ==========================================================
   --
   clMake.set_flags = set_flags;
   clMake.get_flag  = get_flag;
-  clMake.setM32    = setM32;
-  clMake.setM64    = setM64;
   --
   set_flags{ -- default values
     OPTIMIZE  = "O2", 
@@ -2026,8 +2017,8 @@ end;
 
 --
 --=== [file & target handling] =================================================
-local clSourceFile, clTempFile, clTargetFile, clTargetList;
-local Sources, Intermediates, ProgsAndLibs, Targets; 
+local clSourceFile, clIncludeFile, clTempFile, clTargetFile, clTargetList;
+local Sources, Includes, Intermediates, ProgsAndLibs, Targets; 
 do 
   local clMaketreeNode, clTarget, clFile, clGeneratedFile, target, default;
   --
@@ -2051,15 +2042,6 @@ do
 
   clMaketreeNode.presDirty  = function(self)
     if self.prerequisites then
-      if class(self.prerequisites, "StringList") then
-        local pres = clTargetList:new();
-        for n in self.prerequisites() do
-          local t = Targets:find(n);
-          if not t then quitMF("no target '%s' defined.", n); end;
-          pres:add(t); 
-        end;
-        self.prerequisites = pres;
-      end;
       return self.prerequisites:needsBuild();
     end;
     return false, -1;
@@ -2155,12 +2137,34 @@ do
       quit("make(): sourcefile '%s' does not exist.", self[1], 0); 
     end;
     local dirty, modtime, filetime = false, -1, self:filetime();
-    if self.deps then
-      dirty, modtime = self.deps:needsBuild();
-    end;
+    if self.deps then dirty, modtime = self.deps:needsBuild(); end;
     self.dirty = self.dirty or dirty or filetime < modtime;
     --dprint(("clSourceFile.needsBuild():    %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, max(filetime, modtime);
+  end;
+  --
+  clIncludeFile = clFile:subclass{
+    __classname  = "IncludeFile";
+    __init  = function(self, ...) -- ([<path>,]* filename)
+      clIncludeFile.super.__init(self, ...);
+      local fn = self[1];
+      local sf = Includes.__dir[fn];
+      if sf then return sf; end; -- already created entry ..
+      if fn:find("[%*%?]+") then return; end; -- wildcard detected.
+      if self:exists() then 
+        Includes:add(self); 
+      else
+        quitMF("ERROR: cant find included file '%s'.", fn); 
+      end;
+      return self;
+    end;
+  };
+  
+  clIncludeFile.needsBuild = function(self)
+    if not self:exists() then
+      quit("make(): included file '%s' does not exist.", self[1], 0); 
+    end;
+    return false, self:filetime();
   end;
   --
   clGeneratedFile = clFile:subclass{
@@ -2211,6 +2215,17 @@ do
     --dprint(("clTempFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return false, max(time, modtime);
   end;
+  
+  clTempFile.delete     = function(self)
+    local depfile = fn_forceExt(self[1], ".d");
+    if self:exists() then clTempFile.super.delete(self); end;
+    if fn_exists(depfile) then
+      if not Make.options.quiet then
+        print("DELETE " .. fn_canonical(depfile))
+      end;
+      os.remove(depfile);
+    end;
+  end;
   --
   clTargetFile = clGeneratedFile:subclass{
     __classname  = "TargetFile",
@@ -2233,7 +2248,7 @@ do
     end,
   };
   
-  clTargetList.needsBuild     = function(self)
+  clTargetList.needsBuild      = function(self)
     local time, dirty, modtime = -1, false, -1;
     for n in self() do
       dirty, modtime = n:needsBuild();
@@ -2243,7 +2258,7 @@ do
     return self.dirty, time;
   end;
   
-  clTargetList.new_sourcefile = function(self, ...) 
+  clTargetList.new_sourcefile  = function(self, ...) 
     local item = clSourceFile:new(...);
     if item then 
       self:add(item); 
@@ -2251,7 +2266,15 @@ do
     return item;
   end;
   
-  clTargetList.new_tempfile   = function(self, ...)
+  clTargetList.new_includefile = function(self, ...) 
+    local item = clIncludeFile:new(...);
+    if item then 
+      self:add(item); 
+    end;
+    return item;
+  end;
+  
+  clTargetList.new_tempfile    = function(self, ...)
     local item = clTempFile:new(...);
     if item then 
       self:add(item); 
@@ -2259,7 +2282,7 @@ do
     return item;
   end;
   
-  clTargetList.new_targetfile = function(self, ...) 
+  clTargetList.new_targetfile  = function(self, ...) 
     local item = clTargetFile:new(...);
     if item then 
       self:add(item); 
@@ -2267,19 +2290,20 @@ do
     return item;
   end;
   
-  clTargetList.new_target     = function(self, ...)
+  clTargetList.new_target      = function(self, ...)
     local item = clTarget:new(...);
     self:add(item);
     return item;
   end;
   
-  clTargetList.delete         = function(self, ...)
+  clTargetList.delete          = function(self, ...)
     for f in self() do 
       if f:is("GeneratedFile") then f:delete(); end;
     end;
   end;
   -- 
   Sources       = clTargetList:new(); -- all sources.
+  Includes      = clTargetList:new(); -- all headers/sources included by source files.
   ProgsAndLibs  = clTargetList:new(); -- all programs, static and dynamic libs to build.
   Intermediates = clTargetList:new(); -- all intermediate files.
   Targets       = clTargetList:new(); -- all phony targets.
@@ -2304,6 +2328,7 @@ do
   clMakeScript.target  = target;
   --
   clMake.Sources      = Sources;
+  clMake.Includes     = Includes;
   clMake.Tempfiles    = Intermediates;
   clMake.ProgsAndLibs = ProgsAndLibs;
   clMake.Targets      = Targets;
@@ -2352,8 +2377,6 @@ do
         for _, fn in ipairs(fs) do
           if n[fn] then
             res[fn] = class.StrList:new(n[fn]);
-          else
-            quit("need(): need '%s' has no field '%s'.", ns, fn);
           end;
         end;
         return res;
@@ -2511,6 +2534,7 @@ do -- [make pass 2 + 3] ========================================================
     --
     -- returns the dirty status of a given node.
     local function isDirty(treeNode)
+      local deps_generated;
       local res = treeNode:needsBuild();
       if not res then 
         if not quiet then print("... all up to date."); end;
@@ -2571,7 +2595,7 @@ do -- [make pass 2 + 3] ========================================================
     --
     -- pass 3 new way. quick but overlapping targets.
     -- may become the default in the future.
-    local function makeNodeQD(node) 
+    local function makeNode(node) 
       local targets  = clTargetList:new();
       local lvltbl = {};
       local maxlevel = 0;
@@ -2641,35 +2665,6 @@ do -- [make pass 2 + 3] ========================================================
       end;
     end;
     --
-    -- pass 3 simple way. ordered build but not much concurency.
-    -- may become removed in the future.
-    local function makeNodeSW(node) 
-      if (node == nil) or node.done then return; end;
-      -- expanding from's
-      if node.from then
-        for fs in node.from() do
-          local ft = Needs(fs);
-          for n, v in pairs(ft) do
-            node[n]:add(v);
-          end;
-        end;
-      end;
-      if node.prerequisites then 
-        makeNodeSW(node.prerequisites); 
-      end;
-      if node:is("TargetList") then
-        for n in node() do makeNodeSW(n); end;
-        jobs_clear();
-      elseif node:is("FilesAndTargets") then 
-        if always_make or node.dirty then
-          if node.deps then makeNodeSW(node.deps); end;
-          buildNode(node);
-        end;
-      end;
-      node.done = true;
-    end;
-    --
-    local makeNode = Make.options.fastjobs and makeNodeQD or makeNodeSW;
     local target = getTarget();
     while target do
       if not quiet then print("TARGET " .. target[1]); end;
@@ -2738,6 +2733,36 @@ do -- [tools] ==================================================================
     return res
   end;
   
+  function clTool:readDepFile(TreeNode) -- return a TargetList with all included files. or nil.
+    local depfilename = fn_forceExt(TreeNode[1], ".d");
+    local f = io.open(depfilename);
+    if f then
+      dprint(depfilename);
+      local txt = {};
+      for line in f:lines() do
+        if line:find("^%s%S") then
+          line = fn_path_lua(line:gsub("^%s", ""):gsub("%s*\\$", ""));
+          line = split(line);
+          for _, fname in ipairs(line) do
+            if not (TreeNode.deps:is("SourceFile") and TreeNode.deps[1] == fname) then
+              if not txt[fname] then
+                insert(txt, fname);
+                txt[fname] = fname;
+              end;
+            end;
+          end;
+        end;
+      end;
+      f:close();
+      if #txt == 0 then return nil; end;
+      local tl = clTargetList:new();
+      for _, n in ipairs(txt) do
+        tl:new_includefile(n);
+      end;
+      return tl;
+    end;
+    return nil;
+  end;
   -- command line generation
   function clTool:process_DEFINES(TreeNode)
     local values = self:collect_defines(TreeNode);
@@ -2752,12 +2777,18 @@ do -- [tools] ==================================================================
       options:add("-s");
     end;
     -- insert cflags.
-    options:add(TreeNode.cflags:concat())
+    if TreeNode.cflags then options:add(TreeNode.cflags:concat()); end;
     -- insert include dirs
-    for d in TreeNode.incdir() do
-      options:add("-I"..fn_canonical(d));
+    if TreeNode.incdir then
+      for d in TreeNode.incdir() do
+        options:add("-I"..fn_canonical(d));
+      end;
     end;
-    
+    -- depfile generation
+    local depcmd = self.SW_DEPGEN;
+    if depcmd and not Make.get_flag("NODEPS") and TreeNode:is("TempFile") then
+      options:add(depcmd);
+    end;
     return concat(options, " ");
   end;
   
@@ -2778,6 +2809,10 @@ do -- [tools] ==================================================================
     else
       return "-" .. Make.get_flag("OPTIMIZE"); --TODO:
     end;
+  end;
+  
+  function clTool:process_DEPFILE(TreeNode)
+    return fn_canonical(TreeNode.depfilename);
   end;
   
   function clTool:process_SOURCES(TreeNode)
@@ -2809,6 +2844,14 @@ do -- [tools] ==================================================================
     end;
   end;
 
+  function clTool:process_DEPSRC(TreeNode)
+    if class(TreeNode, "SourceFile") then
+      return fn_canonical(TreeNode[1]);
+    else
+      error("DEPSRC is not of class SourceFile", 2);
+    end;
+  end;
+
   function clTool:process_PREFIX(TreeNode)
     local px = Make.get_flag("PREFIX");
     if px and #px > 0 then
@@ -2817,7 +2860,7 @@ do -- [tools] ==================================================================
       px = "";
     end;
     local s = TreeNode.tool["command_"..(TreeNode.type or "")] or TreeNode.tool.command;
-    TreeNode.tool["COMMAND_" .. TreeNode.type] = s:gsub("%$PREFIX%f[%U]", px);
+    TreeNode.tool["command_" .. TreeNode.type] = s:gsub("%$PREFIX%f[%U]", px);
     return px
   end;
 
@@ -2829,13 +2872,13 @@ do -- [tools] ==================================================================
       px = "";
     end;
     local s = TreeNode.tool["command_"..(TreeNode.type or "")] or TreeNode.tool.command;
-    TreeNode.tool["COMMAND_" .. TreeNode.type] = s:gsub("%$SUFFIX", px);
+    TreeNode.tool["command_" .. TreeNode.type] = s:gsub("%$SUFFIX", px);
     return px
   end;
 
   function clTool:process_PROG(TreeNode)
     local s = TreeNode.tool["command_"..(TreeNode.type or "")] or TreeNode.tool.command;
-    TreeNode.tool["COMMAND_" .. TreeNode.type] = s:gsub("%$PROG%f[%U]", self.PROG);
+    TreeNode.tool["command_" .. TreeNode.type] = s:gsub("%$PROG%f[%U]", self.PROG);
     return self.PROG; 
   end;
   
@@ -2877,7 +2920,7 @@ do -- [tools] ==================================================================
           else
             for _, ext in ipairs(exts) do
               f = sources:new_sourcefile(par.base, fn_defaultExt(n, ext));
-              if f then break; end; -- source file found ...
+              if f then break; end;  -- source file found ...
             end;
             if not f then
               quitMF("*ERROR: cant find source file '%s'.", n);
@@ -2998,6 +3041,9 @@ do -- [tools] ==================================================================
         of.libs    = sources.libs;
         of.needs   = sources.needs;
         of.from    = sources.from;
+        if not Make.get_flag("NODEPS") then
+          of.prerequisites = self:readDepFile(of);
+        end;
       end;
       if par[1] ~= nil then remove(par, 1); end;
       par.odir = nil;
@@ -3183,6 +3229,19 @@ do -- [tools] ==================================================================
           loadtc(n);
         end;
       elseif type(name) == "string" then
+        -- setting the M32/64 flags only allowed for Toolchains but makescripts.
+        local function setM32()
+          if clMakeScript.M64 then quit("setM32(): M64 already set.", 0) end;
+          clMakeScript.M32 = true; 
+        end;
+        
+        local function setM64()
+          if clMakeScript.M32 then quit("setM64(): M32 already set.", 0) end;
+          clMakeScript.M64 = true; 
+        end;
+        Make.setM32 = setM32;
+        Make.setM64 = setM64;
+        --
         if name:find("^tc_") or name:find("^"..TOOLCHAIN_PREFIX) then  
           require(name);
         else 
@@ -3193,6 +3252,8 @@ do -- [tools] ==================================================================
                     pcall(require, "tc_" .. name) or 
                     quit("* Cant find Toolchain '%s'.", name, 0);
         end;
+        Make.setM32 = nil;
+        Make.setM64 = nil;
       else
         error("clToolchains.load(): wrong parameter", 3);
       end;
@@ -3367,10 +3428,10 @@ package.preload["tc_gnu"]          = function(...)
     SRC_EXT      = ".c",
     CMD          = "CC",
     PROG         = "gcc",
+    SW_DEPGEN    = "-MMD",
     command_obj  = "$PREFIX$PROG$SUFFIX $OPTIMIZE -c $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
     command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
     command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-    command_dep  = "$PREFIX$PROG$SUFFIX -MM -MF $DEPFILE $OPTIONS $DEFINES $SOURCES",
   };
   Tool:add_group();
   Tool:add_program();
@@ -3381,10 +3442,10 @@ package.preload["tc_gnu"]          = function(...)
     SRC_EXT      = ".c",
     CMD          = "C99",
     PROG         = "gcc",
+    SW_DEPGEN    = "-MMD",
     command_obj  = "$PREFIX$PROG$SUFFIX -std=gnu99 $OPTIMIZE -c $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
     command_dlib = "$PREFIX$PROG$SUFFIX -std=gnu99 $OPTIMIZE -shared $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
     command      = "$PREFIX$PROG$SUFFIX -std=gnu99 $OPTIMIZE $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
-    command_dep  = "$PREFIX$PROG$SUFFIX -MM -MF $DEPFILE $OPTIONS $DEFINES $SOURCES",
   };
   Tool:add_group();
   Tool:add_program();
@@ -3395,10 +3456,10 @@ package.preload["tc_gnu"]          = function(...)
     SRC_EXT      = ".cpp .cxx .C",
     CMD          = "CPP",
     PROG         = "g++",
+    SW_DEPGEN    = "-MMD",
     command_obj  = "$PREFIX$PROG$SUFFIX $OPTIMIZE -c $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
     command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
     command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-    command_dep  = "$PREFIX$PROG$SUFFIX -MM -MF $DEPFILE $OPTIONS $DEFINES $SOURCES",
   };
   Tool:add_group();
   Tool:add_program();
@@ -3412,18 +3473,6 @@ package.preload["tc_gnu"]          = function(...)
     command   = "windres $OPTIONS $SOURCES -o $OUTFILE",
   };
   Tool:add_group();
-  --
-  Tool = Toolchain:new_tool{ "asm",
-    SRC_EXT     = ".s",
-    CMD         = "ASM",
-    PROG        = "as",
-    command     = "$PREFIX$PROG $OPTIMIZE $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-    command_dep = "$PREFIX$PROG -MD $DEPFILE $OPTIONS $DEFINES $(SOURCES)",
-  };
-  Tool:add_group();
-  Tool:add_program();
-  Tool:add_shared();
-  Tool:add_library();
   --
   return Toolchain;
 end;
