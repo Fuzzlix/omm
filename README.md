@@ -184,7 +184,7 @@ The make process is a 3 pass run:
 
 ### Pass 1
 
-**All** marefiles are read and the make tree becomes generated.
+**All** marefiles are read and the make tree becomes generated. Dependency files will be read, if present.  
 This pass may error out if there are:  
 
 * syntax errors in makefiles  
@@ -208,20 +208,8 @@ The dirtyness of all nodes becomes calculated. Also the
 
 For all dirty treenodes the target(s) depend on:  
 
-* the action-functions become executed.  
-* the command line becomes generated and executed.  
-
-There are 2 different pass-3 implementations:  
-
-* standard/ordered: (-j)  
-  Something similiar to [lake][]. Only files
-  in one targetlist can be built at the same time. The job queue
-  becomes flushed after each treenode.
-* quick/unordered: (-J)  
-  The tree nodes become reordered to build bigger
-  lists of jobs (execution levels) that can be executed at the same 
-  time. The job queue becomes flushed after each execution level.  
-  Better: more nodes/level, less levels.
+* The action-functions become executed.  
+* The command line becomes generated and executed. Dependency files may become generated.
 
 See also the the benchmarks.
      
@@ -251,36 +239,6 @@ In the 3rd pass, the lua lib becomes compiled with `"LUA_BUILD_AS_DLL LUA_COMPAT
 
 ---
 
-## Benchmarks:
-
-command: 
-
-    omm [option] default,CLEAN
-
-targets: lua5.3, lfs, lpeg, winapi, luasocket, lualanes, penlight.  
-         (also copying all result files, docs, tests, etc to a install folder.)
-         
-debug output when using '-J':
-
-    makeNodeQD(): 305 nodes in 5 level(s). 6..158 nodes/level
-  
-### Intel core-i5 @3.1GHz (4 cores) 8GB Win7/64, TDM-gcc-5.1, lua-5.3.3
-
-    -n  00,27s
-    -j1 50,47s=100%
-    -j2 29,14s=57.7%   -J2 26,61s=52.7%    J/j=91,3%
-    -j4 20,25s=40.1%   -J4 16,10s=31.9%    J/j=79,5%
-    -j5 19,55s=38.7%   -J5 15,96s=31.6%    J/j=81.6%
-
-### Intel celeron @1.8GHz (2 cores) 16GB Win7/64, TDM-gcc-5.1, lua-5.3.3
-
-    -n  00,44s
-    -j1 70,78s=100%
-    -j2 44,79s=63.2%   -J2 40,83s=57.6%    J/j=91.1%
-    -j3 44,04s=62.2%   -J3 40,68s=57.4%    J/j=92.2%
-
----
-
 # TODO
 
 - Not well tested on linux yet. 
@@ -307,8 +265,6 @@ debug output when using '-J':
   
 - implement a patch ability?
 
-- dependency file generation and handling.
-
 - how to deal with zip/... achives?
 
 - svn tool, repository toolchain. 
@@ -323,6 +279,4 @@ debug output when using '-J':
 - create a documentation.
 
 - create a test suite.
-
-- remove old style pass3 when the new pass3 is well tested and noone complains.
 
