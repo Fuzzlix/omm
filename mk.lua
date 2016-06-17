@@ -1,12 +1,13 @@
 #!/usr/bin/env lua
 --[[ **One More Maketool**
 
-## OMM, a lua based extensible build engine.
+## MK, a lua based extensible build engine.
 
 Inspired by and stealing code snippets from Steve Donovan's [lake].  
 
 Using modified versions of 
-Roland Yonaba's [30log] and Gary V. Vaughan's [optparse].
+Roland Yonaba's [30log].
+god6or@gmail.com's [os.cmdl]
 
 required 3rd party modules:
 [luafilesystem], [winapi] / [luaposix]
@@ -15,7 +16,7 @@ required 3rd party modules:
 
 [lake]:          https://github.com/stevedonovan/Lake
 [30log]:         https://github.com/Yonaba/30log
-[optparse]:      https://github.com/gvvaughan/optparse)
+[os.cmdl]        https://github.com/edartuz/lua-cmdl
 [luafilesystem]: https://github.com/keplerproject/luafilesystem/
 [winapi]:        https://github.com/stevedonovan/winapi
 [luaposix]:      https://github.com/luaposix/luaposix/
@@ -50,9 +51,6 @@ SOFTWARE.
 - Not well tested on linux yet. 
   Still some changes needed to work on linux properly in all cases. (see: TODO comments)
 
-- optparse: better check for parameter values
-  For instance "omm -j default" takes "default" as a -j parameter but as target.
-  
 - better english in messages and comments.
 
 - More sophisticated needs handling.
@@ -72,8 +70,6 @@ SOFTWARE.
   
 - implement a patch ability.
 
-- dependency file generation and handling.
-
 - how to deal with zip/... achives?
 
 - svn toolchain. 
@@ -83,55 +79,30 @@ SOFTWARE.
   A patch ability would be nice to apply local changes to the downloded files.
   - Maybe better implement a "repository" tool, that handles svn, git, zip, .. downloads
   
-- correct silent/normal/verbose message print (doublecheck)
-
 - create a documentation.
 
 - create a test suite.
 
-- remove old style pass3 when the new pass3 is well tested and noone complains.
-
 --]]-------------------------------------------------------
 --
-local USAGE = [=[
-omm 0.1-alpha
- A lua based extensible build engine.
-
-Usage: omm [options] [target[,...]]
+--_DEBUG = true; -- enable some debugging output. see: dprint()
+--D = require"D"; -- debug print utility
+--
+local VERSION = "mk 0.2-beta-16/06/17\n  A lua based extensible build engine.";
+local USAGE   = [=[
+Usage: mk [options] [target[,...]]
 
 Options:
-
-  -b, --always-make           Unconditionally make all targets.
-  -f, --makefile=FILE         makefile to run. (default:"makefile.omm")
-  -n, --just-print,           Don't actually run any command; just print them.
-  -s, --nostrict              Don't compile strictly.
-  -D, --define=DEFINES[,...]  DEFINEs for compilation. eg: "build_mode=debug,BUILD_DLL"
-  -m, --mode=32|64            Compile 32/64 bit targets.
-
-  -I, --import-needs=[FILE]   Read needs from needs definition file.
-  -E, --export-needs=[FILE]   Append new needs to needs definition file.
-  -N, --use-needs=[FILE]      Like '-I -E'.
-
-  -v, --verbose               Be verbose. print commands executed, ...
-  -q, --quiet                 Don't echo commands executed
-  -w, --print-warnings        Print some diagnostic warnings.
-
-  -j, --jobs=[N]              Run N jobs parallel (default: # of cores)
-  -t, --toolchains=NAME[,...] Preload a Toolchain. This toolchain's tools may supersede
-                              tools from other toolchains.
-      --version               Display version information, then exit
-  -h, --help                  Display this help, then exit
+%s
 
 special targets:
- * clean    delete all intermediate files.
- * CLEAN    delete all intermediate and result files.
+  * clean    delete all intermediate files.
+  * CLEAN    delete all intermediate and result files.
 
 Please report bugs to u.sch.zw@gmx.de
 ]=];
---
---_DEBUG = true; -- enable some debugging output. see: dprint()
---
-local MAKEFILENAME = "makefile.omm"; -- default makefile name.
+
+local MAKEFILENAME = "makefile.mk"; -- default makefile name.
 
 --[[ How to prefix a external toolchain name.  
 This prefix may trigger a search in a sub folder or simply be a filename prefix.
@@ -145,7 +116,7 @@ local TOOLCHAIN_PREFIX = "omm_";
 --
 -- [oop, ...] ==================================================================
 --
-package.preload["33log"]    = function(...) 
+package.preload["33log"] = function(...) 
   
   local pairs, ipairs, type, getmetatable, rawget, select =
         pairs, ipairs, type, getmetatable, rawget, select;
@@ -437,429 +408,354 @@ package.preload["33log"]    = function(...)
   --  
 end;
 
-package.preload["Optparse"] = function(...) 
+package.preload["Cmdl"]  = function(...) 
+  local insert, concat = table.insert, table.concat;
   
-  local assert       = assert
-  local error        = error
-  local getmetatable = getmetatable
-  local ipairs       = ipairs
-  local pairs        = pairs
-  local print        = print
-  local require      = require
-  local setmetatable = setmetatable
-  local tostring     = tostring
-  local type         = type
+  local function split(s, re)
+    if type(s) ~= "string" then return s; end;
+    local i1 = 1;
+    local ls = {};
+    re = re or '%s+';
+    while true do
+      local i2, i3 = s:find(re, i1);
+      if not i2 then
+        insert(ls, s:sub(i1));
+        return ls;
+      end;
+      insert(ls, s:sub(i1, i2 - 1));
+      i1 = i3 + 1;
+    end;
+  end;
+
+  local cmdl = arg or {};
   
-  local io_open      = io.open
-  local io_stderr    = io.stderr
-  local os_exit      = os.exit
-  local string_len   = string.len
-  local table_insert = table.insert
+  --[[ Parse command line parameters.
   
-  local function getmetamethod (x, n)
-    local m = (getmetatable (x) or {})[n]
-    if type (m) == "function" then return m end
-    return (getmetatable (m) or {}).__call
-  end
+   input:   argv, argsDef,     
+   default: arg,  cmdl.argsDef,
+     argv - array of command line arguments,
+     argsDef - array of tables, each table describes a single command, and its fields:
+       tag - short tag used as parameter key in results table,
+       cmd - commands synonyms array e.g. {'-h','--help','/?'},
+       descr - command description (used to generate help text),
+       def - list of default values, when the switch is found without parameters. 
+       default - list of default values to use, when this switch is not found.
+       multiple - if true, allows this command multiple times
+                  if false the 2nd occurance creates a error. 
+       params - list of command parameters descriptors, each table containing fields:
+         t - parameter type: 
+             str   (string - default), 
+             int   (integer - bin/oct/hex/dec), 
+             float (float), integer/float arguments.
+             TODO: file_read       - file name - existing and readable. 
+             TODO: file_write      - file name - existing and writable.
+             TODO: file_create     - file name - writable.
+             TODO: file_savecreate - file name - non existing and writable.
+         min,max - allowed numeric range (for int/float) or string length range (for strings)
+         delim (char) - alows multiple values in one parameter separated by <char>.
+                        this cmd alows 1 parameter definitions only.
+         re - regexp used to check string parameter,
+         vals - list of possible parameter values,
   
-  local function len (x)
-    local m = getmetamethod (x, "__len")
-    if m then return m (x) end
-    if type (x) ~= "table" then return #x end
-  
-    local n = #x
-    for i = 1, n do
-      if x[i] == nil then return i -1 end
-    end
-    return n
-  end
-  
-  local function last (t)
-    return t[len (t)]
-  end
-  
-  local optional, required
-  local function normalise (self, arglist)
-    local normal = {}
-    local i = 0
-    while i < len (arglist) do
-      i = i + 1
-      local opt = arglist[i]
-  
-      -- Split '--long-option=option-argument'.
-      if opt:sub (1, 2) == "--" then
-        local x = opt:find ("=", 3, true)
-        if x then
-          local optname = opt:sub (1, x -1)
-  
-    -- Only split recognised long options.
-    if self[optname] then
-            table_insert (normal, optname)
-            table_insert (normal, opt:sub (x + 1))
-    else
-      x = nil
-    end
-        end
-  
-        if x == nil then
-    -- No '=', or substring before '=' is not a known option name.
-          table_insert (normal, opt)
-        end
-  
-      elseif opt:sub (1, 1) == "-" and string_len (opt) > 2 then
-        local orig, split, rest = opt, {}
-        repeat
-          opt, rest = opt:sub (1, 2), opt:sub (3)
-  
-          split[#split + 1] = opt
-  
-    -- If there's no handler, the option was a typo, or not supposed
-    -- to be an option at all.
-    if self[opt] == nil then
-      opt, split = nil, { orig }
-  
-          -- Split '-xyz' into '-x -yz', and reiterate for '-yz'
-          elseif self[opt].handler ~= optional and
-            self[opt].handler ~= required then
-      if string_len (rest) > 0 then
-              opt = "-" .. rest
-      else
-        opt = nil
-      end
-  
-          -- Split '-xshortargument' into '-x shortargument'.
+  returns:
+    error: nil, string:error message
+    ok:    table:args
+             - table of parsed parameters in the form 
+               {tag={value[,valuem...]}}.
+  --]]
+  cmdl.parse = function(argv, argsDef)
+    local result = {};
+    -- use default parameters, if no parameter given ..
+    argv, argsDef = argv or arg, argsDef or cmdl.argsDef;
+    --
+    local argc, err;
+    local othercnt = 1;
+    local shortParamNames = {};
+    local paramd = {}; --parameter descriptors (for faster search)
+    -- fill paramd & shortParamNames list...
+    for _, descr in ipairs(argsDef) do
+      for _, cmd in pairs(descr.cmd) do
+        if cmd:match"^%-[^%-]" then insert(shortParamNames, cmd); end; --remember short params
+        paramd[cmd] = descr;
+      end;
+    end;
+    -- sort shortParamNames
+    table.sort(shortParamNames, function(a, b) return ((#a == #b) and a < b) or #a > #b; end);
+    --
+    local function switch(str, others)
+      if not str then return; end;
+      local cmd, argd, val;
+      -- long arg test
+      cmd, val = str:match"^(%-%-[^=%s]+)[=]?(.*)";
+      -- short arg test
+      if not cmd and str:match"^%-[^%-]" then 
+        for _, sw in ipairs(shortParamNames) do
+          sw = sw:gsub("([%-%?])","%%%1");
+          if str:match("^"..sw) then
+            cmd, val = str:match("^("..sw..")(.*)$"); 
+            val = val and #val > 0 and val or nil;
+            break;
+          end;
+        end;
+      end;
+      -- prepare result
+      argd = paramd[cmd];
+      -- no result: others arg test
+      if not argd and others then
+        others = others[othercnt];
+        if others.multiple or (#others.params == 1 and others.params[1].delim) then 
+          return others, str; 
+        end;
+        othercnt = othercnt + 1;
+        return others, str;
+      end;
+      val  = val and #val > 0 and val or nil;
+      return argd, val;
+    end;
+
+    local function blocked(argd)
+      if argd and argd.blockedby then
+        for _, sw in ipairs(argd.blockedby) do
+          if result[sw] then
+            err = argc;
+            return true;
+          end;           
+        end;
+      end;
+      return false;
+    end;
+
+    local function storeValue(argd, str)
+      local function value_ok(val, paramd)
+        if paramd.t == 'int' then -- parameter is int
+          -- determine number base
+          local base = 10
+          local baseChar = val:match('^0([bBoOdDxX])')
+          if baseChar then -- 0x base given
+            baseChar = baseChar:lower()
+            if baseChar == 'b' then base = 2 -- binary
+            elseif baseChar == 'o' then base = 8 -- octal
+            elseif baseChar == 'd' then base = 10 -- decimal
+            elseif baseChar == 'x' then base = 16 -- hexadecimal
+            end
+            val = val:sub(3, -1) -- extract numeric part
+          end;
+          val = tonumber(val, base); -- convert to number
+          if val then -- no error during conversion - check min/max
+            -- min/max given - check
+            if ((paramd.min) and (val < paramd.min)) or
+               ((paramd.max) and (val > paramd.max)) then 
+              return; 
+            end;
+          end;
+        elseif paramd.t == 'float' then -- parameter is float
+          val = tonumber(val) -- convert to number
+          if val then
+            -- min/max given - check
+            if ((paramd.min) and (val < paramd.min)) or
+               ((paramd.max) and (val > paramd.max)) then 
+              return; 
+            end;
+          end;
+        else  -- parameter is string
+          if paramd.re then -- check with regexp if given
+            local m = val:match(paramd.re);
+            if (m == nil) or (#m ~= #val) then return; end;
+          end;
+          if val then
+            -- check for min/max string length
+            if ((paramd.min) and (#val < paramd.min)) or
+               ((paramd.max) and (#val > paramd.max)) then 
+              return; 
+            end;
+          end;
+        end;
+        -- check for allowed values list
+        if paramd.vals then 
+          for _, _val in pairs(paramd.vals) do
+            if val == _val then return val; end;
+          end;
+          -- value not found in values array - error
+          return;
+        end;
+        return val;
+      end;
+      --
+      if str then
+        -- switch takes parameters?
+        if not argd.params then err = argc; return; end;
+        result[argd.tag] = result[argd.tag] or {};
+        local result = result[argd.tag];
+        -- switch takes one parameter multiple times?
+        if #argd.params == 1 and argd.params[1].delim then
+          local strl = split(str, argd.params[1].delim);
+          for _, _str in ipairs(strl) do
+            _str = value_ok(_str, argd.params[1])
+            if _str then
+              insert(result, _str);
+            else
+              err = argc;
+              return;
+            end;
+          end;
+          return;
+        end;
+        -- switch takes one parameter?
+        if #argd.params == 1 then
+          str = value_ok(str, argd.params[1])
+          if str then
+             insert(result, str);
           else
-            split[#split + 1] = rest
-            opt = nil
-          end
-        until opt == nil
-  
-        -- Append split options to normalised list
-        for _, v in ipairs (split) do table_insert (normal, v) end
+            err = argc;
+          end;
+          return;
+        end;
+        -- switch takes multiple parameter?
+        if #argd.params > 1 then
+          local strl = split(str, argd.delim);
+          if #argd.params ~= #strl then err = argc; return; end;
+          local res = {};
+          for i = 1, #argd do
+            strl[i] = value_ok(strl[i], argd.params[i])
+            if strl[i] then
+              insert(res, strl[i]);
+            else
+              err = argc;
+              return
+            end;
+          end;
+          if argd.multiple then
+            insert{result, res};
+          else
+            for _, v in ipairs(res) do
+              insert(result, v);
+            end;
+          end;
+          return;
+        end;
+        --error("This should not happen here.");
+      elseif argd.params then
+        if argd.params.def then
+          result[argd.tag] = argd.params.def;
+        else
+          err = math.min(argc, #argv);
+        end;
       else
-        table_insert (normal, opt)
+        result[argd.tag] = {true};
+      end;
+    end;
+    
+    -- scanning loop
+    argc = 1;
+    local nxtargd, nxtval;
+    while (argc <= #argv) do
+      local argd, val;
+      argd, val, nxtargd, nxtval = nxtargd, nxtval; -- shift
+      -- expand next switch, if nessesary
+      if not argd then argd, val = switch(argv[argc], argsDef.others); end;
+      if blocked(argd) then 
+        err = argc;
+        break;
+      end;
+      if val then -- value attached to switch ...
+        if argd.params then
+          storeValue(argd, val);
+        else
+          err = argc;
+        end;
+      elseif not argd.params then
+        storeValue(argd, nil);
+      elseif  argd.params then
+        nxtargd, nxtval = switch(argv[argc+1]);
+        if not nxtargd then 
+          argc = argc + 1;
+          storeValue(argd, argv[argc]);
+        else
+          storeValue(argd);
+        end;
+      end;
+      if err then break; end;
+      argc = argc + 1;
+    end;
+    -- handle errors
+    if err then  -- generate error message
+      local msg = "";
+      for i = 1, #argv do
+        if i == err then 
+          msg = msg .. " [?> ".. argv[i] .." <?]";
+        else
+          msg = msg .. " " .. argv[i];
+        end;
       end
-    end
+      return nil, msg;  -- error, error message
+    end;
+    -- fill in default values for ommited parameters.
+    for _, _argd in ipairs(argsDef) do
+      if _argd.default and result[_argd.tag] == nil then
+        result[_argd.tag] = _argd.default;
+      end;
+    end;
+    -- flatten result list for simple parameters...
+    for _, _argd in ipairs(argsDef) do
+      if result[_argd.tag] and (not _argd.params or (#_argd.params == 1 and 
+          not (_argd.multiple or _argd.params[1].delim))) then
+        result[_argd.tag] = result[_argd.tag][1] or true;
+      end;
+    end;
+    --
+    return result;
+  end;
   
-    normal[-1], normal[0]  = arglist[-1], arglist[0]
-    return normal
-  end
-  
-  local function set (self, opt, value)
-    local key = self[opt].key
-    local opts = self.opts[key]
-  
-    if type (opts) == "table" then
-      table_insert (opts, value)
-    elseif opts ~= nil then
-      self.opts[key] = { opts, value }
-    else
-      self.opts[key] = value
-    end
-  end
-  
-  function optional (self, arglist, i, value)
-    if i + 1 <= len (arglist) and arglist[i + 1]:sub (1, 1) ~= "-" then
-      return self:required (arglist, i, value)
-    end
-  
-    if type (value) == "function" then
-      value = value (self, arglist[i], nil)
-    elseif value == nil then
-      value = true
-    end
-  
-    set (self, arglist[i], value)
-    return i + 1
-  end
-  
-  
-  function required (self, arglist, i, value)
-    local opt = arglist[i]
-    if i + 1 > len (arglist) then
-      self:opterr ("option '" .. opt .. "' requires an argument")
-      return i + 1
-    end
-  
-    if type (value) == "function" then
-      value = value (self, opt, arglist[i + 1])
-    elseif value == nil then
-      value = arglist[i + 1]
-    end
-  
-    set (self, opt, value)
-    return i + 2
-  end
-  
-  
-  local function finished (self, arglist, i)
-    for opt = i + 1, len (arglist) do
-      table_insert (self.unrecognised, arglist[opt])
-    end
-    return 1 + len (arglist)
-  end
-  
-  
-  local function flag (self, arglist, i, value)
-    local opt = arglist[i]
-    if type (value) == "function" then
-      set (self, opt, value (self, opt, true))
-    elseif value == nil then
-      local key = self[opt].key
-      self.opts[key] = true
-    end
-  
-    return i + 1
-  end
-  
-  
-  local function help (self)
-    print (self.helptext)
-    os_exit (0)
-  end
-  
-  
-  local function version (self)
-    print (self.versiontext)
-    os_exit (0)
-  end
-  
-  
-  
-  local boolvals = {
-    ["false"] = false, ["true"]  = true,
-    ["0"]     = false, ["1"]     = true,
-    no        = false, yes       = true,
-    n         = false, y         = true,
-  }
-  
-  
-  local function boolean (self, opt, optarg)
-    if optarg == nil then optarg = "1" end -- default to truthy
-    local b = boolvals[tostring (optarg):lower ()]
-    if b == nil then
-      return self:opterr (optarg .. ": Not a valid argument to " ..opt[1] .. ".")
-    end
-    return b
-  end
-  
-  
-  local function file (self, opt, optarg)
-    local h, errmsg = io_open (optarg, "r")
-    if h == nil then
-      return self:opterr (optarg .. ": " .. errmsg)
-    end
-    h:close ()
-    return optarg
-  end
-  
-  local function opterr (self, msg)
-    local prog = self.program
-    -- Ensure final period.
-    if msg:match ("%.$") == nil then msg = msg .. "." end
-    io_stderr:write (prog .. ": error: " .. msg .. "\n")
-    io_stderr:write (prog .. ": Try '" .. prog .. " --help' for help.\n")
-    os_exit (2)
-  end
-  
-  local function on (self, opts, handler, value)
-    if type (opts) == "string" then opts = { opts } end
-    handler = handler or flag -- unspecified options behave as flags
-  
-    local normal = {}
-    for _, optspec in ipairs (opts) do
-      optspec:gsub ("(%S+)",
-                    function (opt)
-                      -- 'x' => '-x'
-                      if string_len (opt) == 1 then
-                        opt = "-" .. opt
-  
-                      -- 'option-name' => '--option-name'
-                      elseif opt:match ("^[^%-]") ~= nil then
-                        opt = "--" .. opt
-                      end
-  
-                      if opt:match ("^%-[^%-]+") ~= nil then
-                        -- '-xyz' => '-x -y -z'
-                        for i = 2, string_len (opt) do
-                          table_insert (normal, "-" .. opt:sub (i, i))
-                        end
-                      else
-                        table_insert (normal, opt)
-                      end
-                    end)
-    end
-  
-    -- strip leading '-', and convert non-alphanums to '_'
-    local key = last (normal):match ("^%-*(.*)$"):gsub ("%W", "_")
-  
-    for _, opt in ipairs (normal) do
-      self[opt] = { key = key, handler = handler, value = value }
-    end
-  end
-  
-  
-  local function parse (self, arglist, defaults)
-    self.unrecognised, self.opts = {}, {}
-  
-    arglist = normalise (self, arglist)
-  
-    local i = 1
-    while i > 0 and i <= len (arglist) do
-      local opt = arglist[i]
-  
-      if self[opt] == nil then
-        table_insert (self.unrecognised, opt)
-        i = i + 1
-  
-        -- Following non-'-' prefixed argument is an optarg.
-        if i <= len (arglist) and arglist[i]:match "^[^%-]" then
-          table_insert (self.unrecognised, arglist[i])
-          i = i + 1
-        end
-  
-      -- Run option handler functions.
+  -- generates help text from description table
+  cmdl.help = function(indent)
+    local result = {};
+    indent = indent or 0;
+    if not cmdl.argsDef then error("cmdl.help() - no parameter definition found."); end;
+    for _, arg in ipairs(cmdl.argsDef) do
+      local cmdl = string.rep(" ", indent);
+      for _, cmd in ipairs(arg.cmd) do
+        cmdl = cmdl .. cmd .. ', ';
+      end
+      cmdl = cmdl:sub(1, -3);
+      if arg.params then
+        cmdl = cmdl .. '=';
+        for _, param in ipairs(arg.params) do
+          if param.values then -- show list of values
+            cmdl = cmdl .. "";
+            for _, v in ipairs(param.values) do cmdl = cmdl .. v .. '|' end;
+            cmdl = cmdl:sub(1,-2) .. ' ';
+          elseif param.min or param.max then -- show min/max
+            cmdl = cmdl..'['
+            if param.min then cmdl = cmdl .. param.min end;
+            cmdl = cmdl .. '..';
+            if param.max then cmdl = cmdl .. param.max end;
+            cmdl = cmdl .. '] ';
+          else -- else show parameter type
+            local t = param.lbl or param.t or 'str';
+            --t = t:upper();
+            cmdl = cmdl .. t;
+            if param.delim then 
+              cmdl = cmdl .. "{" .. param.delim .. t .. "}";
+            end;
+          end;
+        end;
       else
-        assert (type (self[opt].handler) == "function")
-  
-        i = self[opt].handler (self, arglist, i, self[opt].value)
-      end
-    end
-  
-    -- Merge defaults into user options.
-    for k, v in pairs (defaults or {}) do
-      if self.opts[k] == nil then self.opts[k] = v end
-    end
-  
-    -- metatable allows `io.warn` to find `parser.program` when assigned
-    -- back to _G.opts.
-    return self.unrecognised, setmetatable (self.opts, {__index = self})
-  end
-  
-  
-  local function set_handler (current, new)
-    assert (current == nil, "only one handler per option")
-    return new
-  end
-  
-  
-  local function _init (self, spec)
-    local parser = {}
-  
-    parser.versiontext, parser.version, parser.helptext, parser.program =
-      spec:match ("^([^\n]-(%S+)\n.-)%s*([Uu]sage: (%S+).-)%s*$")
-  
-    if parser.versiontext == nil then
-      error ("OptionParser spec argument must match '<version>\\n" ..
-             "...Usage: <program>...'")
-    end
-  
-    -- Collect helptext lines that begin with two or more spaces followed
-    -- by a '-'.
-    local specs = {}
-    parser.helptext:gsub ("\n  %s*(%-[^\n]+)",
-                          function (spec) table_insert (specs, spec) end)
-  
-    -- Register option handlers according to the help text.
-    for _, spec in ipairs (specs) do
-      local options, handler = {}
-  
-      -- Loop around each '-' prefixed option on this line.
-      while spec:sub (1, 1) == "-" do
-  
-        -- Capture end of options processing marker.
-        if spec:match "^%-%-,?%s" then
-          handler = set_handler (handler, finished)
-  
-        -- Capture optional argument in the option string.
-        elseif spec:match "^%-[%-%w]+=%[.+%],?%s" then
-          handler = set_handler (handler, optional)
-  
-        -- Capture required argument in the option string.
-        elseif spec:match "^%-[%-%w]+=%S+,?%s" then
-          handler = set_handler (handler, required)
-  
-        -- Capture any specially handled arguments.
-        elseif spec:match "^%-%-help,?%s" then
-          handler = set_handler (handler, help)
-  
-        elseif spec:match "^%-%-version,?%s" then
-          handler = set_handler (handler, version)
-        end
-  
-        -- Consume argument spec, now that it was processed above.
-        spec = spec:gsub ("^(%-[%-%w]+)=%S+%s", "%1 ")
-  
-        -- Consume short option.
-        local _, c = spec:gsub ("^%-([-%w]),?%s+(.*)$",
-                                function (opt, rest)
-                                  if opt == "-" then opt = "--" end
-                                  table_insert (options, opt)
-                                  spec = rest
-                                end)
-  
-        -- Be careful not to consume more than one option per iteration,
-        -- otherwise we might miss a handler test at the next loop.
-        if c == 0 then
-          -- Consume long option.
-          spec:gsub ("^%-%-([%-%w]+),?%s+(.*)$",
-                     function (opt, rest)
-                       table_insert (options, opt)
-                       spec = rest
-                     end)
-        end
-      end
-  
-      -- Unless specified otherwise, treat each option as a flag.
-      on (parser, options, handler or flag)
-    end
-  
-    return setmetatable (parser, getmetatable (self))
-  end
-  
-  
+        cmdl = cmdl .. ' ';
+      end;
+      insert(result, {cmdl, arg.descr});
+    end;
+    local maxlen = 0;
+    for _, t in ipairs(result) do 
+      if #t[1] > maxlen then maxlen = #t[1]; end;
+    end;
+    for i, t in ipairs(result) do 
+      result[i] = t[1] .. string.rep(" ", maxlen - #t[1]) .. " " .. t[2]; 
+    end;
+    return concat(result,"\n");
+  end;
   --
-  return setmetatable ({
-    prototype = setmetatable ({
-      -- Prototype initial values.
-      opts        = {},
-      helptext    = "",
-      program     = "",
-      versiontext = "",
-      version     = 0,
-    }, {
-      _type = "OptionParser",
-  
-      __call = _init,
-  
-      __index = {
-        boolean  = boolean,
-        file     = file,
-        finished = finished,
-        flag     = flag,
-        help     = help,
-        optional = optional,
-        required = required,
-        version  = version,
-  
-        on     = on,
-        opterr = opterr,
-        parse  = parse,
-      },
-    }),
-  }, {
-    _type = "Module";
-    -- Pass through options to the OptionParser prototype.
-    __call = function (self, ...) return self.prototype (...) end;
-    __index = function (self, name)
-      local ok, t = pcall (require, "Optparse." .. name)
-      if ok then
-        rawset (self, name, t)
-        return t
-      end
-    end,
-  })
-  
+  return cmdl;
+  --
 end;
 --
 -- [] ==========================================================================
@@ -883,7 +779,7 @@ local warning, warningMF, quit, quitMF, dprint, chdir, choose, pick, split,
       split2, collect, shell, execute, roTable, pairsByKeys, subst, substitute, 
       flatten_tbl, luaVersion, 
       winapi, posix,
-      ENV, PWD, LUAVER, NUMCORES;
+      ENV, PWD, NUMCORES;
 do
   local ok;
   if WINDOWS then
@@ -1004,7 +900,7 @@ do
       cmd = cmd:gsub("%s*$"," > ") .. choose(WINDOWS, 'NUL', '/dev/null') .. " 2>&1";
     end
     local res1, _, res3 = os.execute(cmd)
-    if LUAVER == "LUA5.1" or LUAVER == "LUAJIT" then
+    if type(res1) == "number" then
       return res1 == 0, res1;
     else
       return res1, res3;
@@ -1436,7 +1332,7 @@ do
       end;
       return false;
     else
-      local res = shell('which %s 2> /dev/null',prog);
+      local res = shell('which %s 2> /dev/null', prog);
       if res == '' then return false end;
       return res;
     end
@@ -1484,7 +1380,7 @@ do
   
 end;
 --
-do -- [os & hardware detection ] =============================================== 
+do -- [os & hardware detection] ================================================ 
   --
   --[[--------------------------------------------------------------------
   
@@ -1517,7 +1413,6 @@ do -- [os & hardware detection ] ===============================================
     local t = {nil, [false]  = 'LUA5.1', [true] = 'LUA5.2', [1/'-0'] = 'LUA5.3', [1] = 'LUAJIT' };
     return t[1] or t[1/0] or t[f()==f()];
   end;
-  LUAVER = luaVersion();
   --
   local function getCores()
     if WINDOWS then
@@ -1534,7 +1429,7 @@ do -- [os & hardware detection ] ===============================================
   end;
   NUMCORES = getCores();
   --
-  dprint("  Running on %s\t %s cores detected.",  LUAVER, NUMCORES);
+  dprint("  Running on %s\t %s cores detected.",  luaVersion(), NUMCORES);
   --
 end;
 --
@@ -1604,6 +1499,166 @@ do -- [error handling] =========================================================
     );
     os.exit(1);
   end;
+  --
+end;
+--
+----- [commandline parameter] ==================================================
+local cmdl;
+do
+  local DFN = fn_path_lua(fn_join(choose(WINDOWS, fn_splitpath(arg[0]), ENV.HOME), "needs.mkn"));
+  --
+  cmdl = require "Cmdl";
+  cmdl.argsDef = {
+    { tag = "build", 
+      cmd = {'-B', "--build-all"}, 
+      descr = "Unconditionally make all targets.",
+      blockedby = {"printhelp", "printversion", "build"},
+    },
+    { tag = "makefile", 
+      cmd = {"-f", "--makefile"}, 
+      descr = 'makefile to run. (default:"makefile.mk")',
+      blockedby = {"printhelp", "printversion", "makefile"},
+      params = { {
+                 lbl = "FILE",
+                 re = '^[%w%._/\\:]+$',
+                 },
+               },
+      default = {MAKEFILENAME},
+    },
+    { tag = "dont_execute", 
+      cmd = {'-n', "--just-print"}, 
+      descr = "Don't actually run any command; just print them.", 
+      blockedby = {"printhelp", "printversion", "dont_execute"},
+    },
+    { tag = "defines", 
+      cmd = {'-D', "--define"}, 
+      descr = 'DEFINEs for compilation.',
+      blockedby = {"printhelp", "printversion"},
+      multiple = true;
+      params = { {
+                 delim = ','
+                 }
+               }
+    },
+    { tag = "mode", 
+      cmd = {'-m', "--mode"}, 
+      descr = 'Compile 32/64 bit targets.',
+      blockedby = {"printhelp", "printversion", "mode"},
+      params = { {
+                 re = '^[%w%._/\\:]+$',
+                 values = {"32","64"},
+                 }
+               }
+    },
+    { tag = "import_needs", 
+      cmd = {"-I", "--import-needs"}, 
+      descr = 'Read needs from needs definition file.',
+      blockedby = {"printhelp", "printversion", "use-needs"},
+      params = { {
+                 lbl = "FILE",
+                 re = '^[%w%._/\\:]+$',
+                 },
+               def = {DFN},
+               }
+    },
+    { tag = "export_needs", 
+      cmd = {"-E", "--export-needs"}, 
+      descr = 'Append new needs to needs definition file.',
+      blockedby = {"printhelp", "printversion", "use-needs"},
+      params = { {
+                 lbl = "FILE",
+                 re = '^[%w%._/\\:]+$',
+                 },
+               def = {DFN},
+               }
+    },
+    { tag = "use_needs", 
+      cmd = {"-N", "--use-needs"}, 
+      descr = "Like '-I -E'.",
+      blockedby = {"printhelp", "printversion", "import_needs", "export_needs"},
+      params = { {
+                 lbl = "FILE",
+                 re = '^[%w%._/\\:]+$',
+                 },
+               def = {DFN},
+               }
+    },
+    { tag = "aliases", 
+      cmd = {"-A", "--alias"}, 
+      descr = "define a alias for a existing need.",
+      blockedby = {"printhelp", "printversion"},
+      params = { {
+                 lbl = "ALIAS",
+                 re = '^[%w]+=[%w]+$',
+                 delim = ","
+                 },
+               }
+    },
+    { tag = "verbose", 
+      cmd = {'-v', "--verbose"}, 
+      descr = 'Be verbose. print commands executed, ...', 
+      blockedby = {"printhelp", "printversion", "silent", "verbose"},
+    },
+    { tag = "silent", 
+      cmd = {'-s', "--silent"}, 
+      descr = "Don't echo commands executed.", 
+      blockedby = {"printhelp", "printversion", "silent", "verbose"},
+    },
+    { tag = "question", 
+      cmd = {'-q', "--question"}, 
+      descr = "Run no recipe; exit status says if up to date.", 
+      blockedby = {"printhelp", "printversion", "question"},
+    },
+    { tag = "jobs", 
+      cmd = {'-j', "--jobs"}, 
+      descr = 'Run N jobs parallel. (default: # of cores)',
+      blockedby = {"printhelp", "printversion", "jobs"},
+      params = {
+                 {
+                 t = "int",
+                 min = 1,
+                 },
+               --def = {tonumber(NUMCORES)},
+               }
+    },
+    { tag = "toolchain", 
+      cmd = {'-t', "--toolchain"}, 
+      descr = 'Load a Toolchain.',
+      blockedby = {"printhelp", "printversion"},
+      multiple = true;
+      params = { {
+                 lbl = "NAME",
+                 re = "^[%w_]+$",
+                 delim = ','
+                 }
+               }
+    },
+    { tag = "printversion", 
+      cmd = {"-V", "--version"}, 
+      descr = 'Display version information, then exit', 
+      blockedby = {"printhelp", "targets", "printversion"},
+    },
+    { tag = "printhelp", 
+      cmd = {"-h", "--help"}, 
+      descr = "Display this help, then exit.", 
+      blockedby = {"build", "makefile", "dont_execute", "defines", "mode", 
+                   "import_needs", "export_needs", "use_needs", "aliases", 
+                   "verbose", "silent", "question", "jobs", "toolchain", 
+                   "targets", "printversion", "printhelp"},
+    },
+    --
+    others = {
+      { tag = "targets",
+        blockedby = {"printhelp", "printversion"},
+        multiple = true;
+        params = { {
+                   re = "^[%w%._]+$",
+                   delim = ","
+                   }
+                 }
+      },
+    },
+  };
   --
 end;
 --
@@ -1687,7 +1742,6 @@ do
     end;
   end;
   if winapi or posix then
-
     function job_start(cmd, callback)
       local cmdline, tmpfile = command_line(cmd)
       local p, r = spawn(cmdline)
@@ -1799,26 +1853,11 @@ end;
 local runMake; -- FORWARD()
 do -- [Make] ===================================================================
   --
-  local optparser;
-  --
   clMake = class.Base:subclass{
     __classname  = "Make",
-    WINDOWS   = WINDOWS,
-    utils     = roTable{
-      chdir      = chdir, 
-      choose     = choose,  
-      pick       = pick,  
-      split      = split,   
-      split2     = split2 , 
-      shell      = shell, 
-      execute    = execute, 
-      subst      = subst, 
-      roTable    = roTable, 
-      substitute = substitute, 
-      which      = fn_which;
-      ENV        = ENV
-    },
-    path      = roTable{
+    WINDOWS     = WINDOWS,
+    Commandline = cmdl,
+    path        = roTable{
       temp            = fn_temp,     
       isabs           = fn_isabs,     
       canonical       = fn_canonical,  
@@ -1839,73 +1878,82 @@ do -- [Make] ===================================================================
       files_from_mask = fn_files_from_mask,
       get_directories = fn_get_directories,
     },
-    warning   = warning,
-    warningMF = warningMF,
-    quit      = quit,
-    quitMF    = quitMF,
-    --concurrent_jobs = concurrent_jobs;
+    utils       = roTable{
+      chdir      = chdir, 
+      choose     = choose,  
+      pick       = pick,  
+      split      = split,   
+      split2     = split2 , 
+      shell      = shell, 
+      execute    = execute, 
+      subst      = subst, 
+      roTable    = roTable, 
+      substitute = substitute, 
+      which      = fn_which;
+      ENV        = ENV
+    },
+    warning     = warning,
+    warningMF   = warningMF,
+    quit        = quit,
+    quitMF      = quitMF,
   }; clMake:protect();
+
   clMake.__call = function(self, cmd) 
     local makefile, target;
     local function parseCommandline(cmd)
+      local cmdl = require "Cmdl"
       local makefile, target;
-      optparser = require "Optparse" (USAGE);
-      cmd, clMake.options = optparser:parse(cmd);
-      clMake.options.define = clMake.options.define and split(clMake.options.define, ",") or {};
-      if #cmd > 1 then quit('too many or misspelled arguments in command line.', 0); end;
-      target = cmd[1];
+      local options, msg = cmdl.parse(cmd);
+      if not options then 
+        print(("* error in parameter:%s"):format(msg)); 
+        os.exit(1);
+      end;
+      target = options.targets;
+      clMake.options = options;
       --
-      local defaultNeedsFilename = fn_join(fn_splitpath(arg[0]), "needs.omm"); --TODO: linux: default "~/needs.omm"
-      if clMake.options.jobs then       -- -j, --jobs
-        if clMake.options.jobs == true then 
-          clMake.options.jobs = NUMCORES; 
-        end;
+      if options.printversion then -- -V, --version
+        print(VERSION);
+        os.exit();
+      end;
+      if options.jobs then         -- -j, --jobs
         local ok, err = concurrent_jobs(clMake.options.jobs)
         if not ok then warning(err) end;
       end;
-      if Make.options.makefile then     -- -f, --makefile
-        makefile = fn_defaultExt(Make.options.makefile, "omm");
+      if options.makefile then     -- -f, --makefile
+        options.makefile = fn_path_lua(fn_abs(fn_defaultExt(Make.options.makefile, "mk")));
       end;
-      if Make.options.toolchains then   -- -t, --toolchains
-        Make.Tools:load(split(Make.options.toolchains,","));
+      if options.toolchains then   -- -t, --toolchains
+        Make.Tools:load(Make.options.toolchains);
       end;
-      if Make.options.mode then         -- -m, --mode=32|64
-        local mode = Make.options.mode;
-        if type(mode) ~= "string" then mode = ""; end; -- trigger error
-        mode = mode:match("^[mM]?(32)$") or mode:match("^[mM]?(64)$")
-        if mode then 
-          Make["setM"..mode]();
-        else
-          quit("make(): commandline parameter error in --mode", 0);
-        end;
+      if options.mode then         -- -m, --mode=32|64
+        local mode = ""..Make.options.mode;
+        Make["setM"..mode]();
       end;
-      if Make.options.use_needs then    -- -N, --use-needs=[FILE] 
-        if type(Make.options.use_needs) == "boolean" then
-          Make.options.use_needs = defaultNeedsFilename;
-        end;
-        Make.options.use_needs = fn_abs(Make.options.use_needs);
-        if not Make.options.import_needs then
-          Make.options.import_needs = true;
-        end;
-        if not Make.options.export_needs then
-          Make.options.export_needs = true;
-        end;
-        
+      if options.use_needs then    -- -N, --use-needs=[FILE] 
+        Make.options.import_needs = Make.options.use_needs;
+        Make.options.export_needs = Make.options.use_needs;
+        options.use_needs = nil;
       end;
-      if Make.options.import_needs then -- -I, --import-needs=[FILE]  
-        if type(Make.options.import_needs) == "boolean" then
-          Make.options.import_needs = Make.options.use_needs or defaultNeedsFilename;
-        end;
+      if options.import_needs then -- -I, --import-needs=[FILE]  
         Make.options.import_needs = fn_abs(Make.options.import_needs);
         Make.Needs:import(Make.options.import_needs);
       end;
-      if Make.options.export_needs then -- -E, --export-needs=[FILE]  
-        if type(Make.options.export_needs) == "boolean" then
-          Make.options.export_needs = Make.options.use_needs or defaultNeedsFilename;
-        end;
+      if options.export_needs then -- -E, --export-needs=[FILE]  
         Make.options.export_needs = fn_abs(Make.options.export_needs);
       end;
-      --
+      if options.aliases then      -- -A, --alias=ALIAS
+        for _, a in ipairs(options.aliases) do
+          Make.Needs(a);
+        end;
+      end;
+      -- Late execution of help text display.
+      -- This way, loaded toolchains may insert aditional command line switches
+      -- BEFORE the help message becomes generated.
+      if options.printhelp then    -- -h, --help
+        print(USAGE:format(cmdl.help(1)));
+        os.exit();
+      end;
+     --
       return makefile, target;
     end;
     --
@@ -1913,10 +1961,6 @@ do -- [Make] ===================================================================
     if type(cmd) == "string" then cmd = split(cmd); end;
     if MAKELEVEL == 0 then -- parse the command line ...
       makefile, target = parseCommandline(cmd);
-      --print(optparser.program .." "..optparser.version);
-      if target and target:find("[^%w,]") then 
-        quit("invalid command line parameter '%s'.\n(Try '%s -h' for help.)", target, optparser.program, 0); 
-      end;
       self.target = target;
       makefile = makefile or MAKEFILENAME;
       -- Load preloaded toolchains.
@@ -1927,7 +1971,7 @@ do -- [Make] ===================================================================
     end;
     --
     if not fn_isFile(makefile) then 
-      if not fn_isFile(makefile..".omm") then 
+      if not fn_isFile(makefile..".mk") then 
         if fn_isDir(makefile) then 
           makefile = fn_join(makefile, MAKEFILENAME); 
         end;
@@ -1935,7 +1979,7 @@ do -- [Make] ===================================================================
           quit("make(): cant find '%s'.", makefile, 0); 
         end;
       else
-        makefile = makefile..".omm";
+        makefile = makefile..".mk";
       end;
     end;
     --
@@ -1945,7 +1989,6 @@ do -- [Make] ===================================================================
   end;
   --
   Make       = clMake:singleton();
-  Make.USAGE = USAGE;
   --
   package.preload["Make"]  = function(...) return Make; end;
   --
@@ -1953,6 +1996,7 @@ do -- [Make] ===================================================================
   --
 end;
 --
+local setM32, setM64;
 do -- [flag handling] ==========================================================
   --
   local function setFlag(n, v)
@@ -1963,6 +2007,15 @@ do -- [flag handling] ==========================================================
     quit("set %s: read only flags can't be set.", n, 0);
   end;
   
+  function setM32()
+    if clMakeScript.M64 then quit("setM32(): M64 already set.", 0) end;
+    clMakeScript.M32 = true; 
+  end;
+  
+  function setM64()
+    if clMakeScript.M32 then quit("setM64(): M32 already set.", 0) end;
+    clMakeScript.M64 = true; 
+  end;
   --
   local flagtable = {
     CC       = setFlag, 
@@ -2001,16 +2054,19 @@ do -- [flag handling] ==========================================================
   --
   clMake.set_flags = set_flags;
   clMake.get_flag  = get_flag;
+  clMake.setM32    = setM32;
+  clMake.setM64    = setM64;
   --
   set_flags{ -- default values
     OPTIMIZE  = "O2", 
     STRICT    = false, 
     DEBUG     = false, 
-    --PREFIX  = "",
-    --SUFFIX  = "",
-    --M32     = false, 
-    --PLAT    = choose(WINDOWS, "windows", ""); --TODO: other platforms
     NODEPS    = false, 
+    PREFIX  = nil,
+    SUFFIX  = nil,
+    M32     = nil, -- r/o for set_flags
+    M64     = nil, -- r/o for set_flags
+    --PLAT    = choose(WINDOWS, "windows", ""); --TODO: other platforms
   };
   --
 end;
@@ -2344,8 +2400,8 @@ do
   clNeeds = class.UList:subclass{
     __classname = "Needs",
     __key  = 1,
-    fields = {"defines", "incdir", "libs", "libdir", "prerequisites"}, -- allowed fields.
-    exportfields = {"defines", "incdir", "libs", "libdir"},
+    fields = class.StrList:new{"defines", "incdir", "libs", "libdir", "prerequisites"}, -- allowed fields.
+    exportfields = class.StrList:new{"defines", "incdir", "libs", "libdir"},
   }; clNeeds:protect();
   
   clNeeds.__call = function(self, ...) -- need definition and reading
@@ -2364,14 +2420,11 @@ do
         return n;
       end;
       -- "need:field" ?
-      if p1:find(":") then
+      if p1:find("^[^:]+:.+$") then
         local n;
         local ns = p1:match("^([^:]+):.+$");
-        if ns then
-          n = self:find(ns);
-        else
-          quit("needs(): no need '%s' found.", ns);
-        end;
+        n = self:find(ns);
+        if not n then quit("needs(): no need '%s' found.", ns); end;
         local res = {};
         local fs = split(p1:match("^[^:]+:(.+)$"), ",");
         for _, fn in ipairs(fs) do
@@ -2408,9 +2461,13 @@ do
         self.__dir[needname] = need;
         insert(self, need);
       end;
-      for _, fn in ipairs(self.fields) do
-        if p1[fn] then
-          need[fn] = class.StrList:new(p1[fn]);
+      for fn, v in pairs(p1) do
+        if fn ~= 1 then
+          if self.fields:find(fn) then
+            need[fn] = class.StrList:new(v);
+          else
+            need[fn] = v;
+          end;
         end;
       end;
     else
@@ -2419,7 +2476,7 @@ do
   end;
   
   clNeeds.export = function(self, filename)
-    filename = filename or "needs.omm";
+    filename = fn_abs(filename or "needs.mkn");
     local OldNeeds = clNeeds:new();
     local sandbox = {define_need = OldNeeds};
     local f, err = loadfile (filename, "t", sandbox);
@@ -2437,9 +2494,17 @@ do
     if f then
       for _, need in ipairs(self) do
         f:write(('define_need{ "%s",\n'):format(need[1]));
-        for _, fn in ipairs(self.exportfields) do
-          if need[fn] then
-            f:write(('  %s = "%s",\n'):format(fn, need[fn]:concat()));
+        for fn, v in pairs(need) do
+          if fn ~= "prerequisites" and fn ~= "predefined" and fn ~= 1 then
+            if class(v, "StringList") then
+              f:write(('  %s = "%s",\n'):format(fn, v:concat()));
+            elseif type(v) == "string" then
+              f:write(('  %s = "%s",\n'):format(fn, v));
+            elseif type(v) == "boolean" then
+              f:write(('  %s = %s,\n'):format(fn, v and "true" or "false"));
+            else
+              quit("Need.export(): wrong field '%s.%s'.", need[1], fn);
+            end;
           end;
         end;
         f:write("};\n\n");
@@ -2451,10 +2516,10 @@ do
   end;
   
   clNeeds.import = function(self, filename)
-    filename = filename or "needs.omm";
+    filename = fn_abs(filename or "needs.mkn");
     local NewNeeds = clNeeds:new();
     local sandbox = {define_need = NewNeeds};
-    local f, err = loadfile (filename, "t", sandbox);
+    local f = loadfile (filename, "t", sandbox);
     if f then 
       if setfenv then setfenv(f, sandbox); end; -- lua 5.1
       f();
@@ -2485,10 +2550,12 @@ do
   clMakeScript.define_need = Needs;
   clMake.Needs = Needs;
   --
-  Needs{'windows', libs = 'kernel32 user32 gdi32 winspool comdlg32 advapi32 shell32 uuid oleaut32 ole32 comctl32 psapi mpr'};
-  Needs"windows".predefined=true;
-  Needs{'unicode', defines = 'UNICODE _UNICODE'};
-  Needs"unicode".predefined=true;
+  Needs{ 'windows', 
+         libs = 'kernel32 user32 gdi32 winspool comdlg32 advapi32 shell32 uuid oleaut32 ole32 comctl32 psapi mpr',
+         predefined = true};
+  Needs{ 'unicode', 
+         defines = 'UNICODE _UNICODE', 
+         predefined = true};
   --
 end;
 --
@@ -2530,11 +2597,9 @@ do -- [make pass 2 + 3] ========================================================
       end;
       return target;
     end;
-    
     --
     -- returns the dirty status of a given node.
     local function isDirty(treeNode)
-      local deps_generated;
       local res = treeNode:needsBuild();
       if not res then 
         if not quiet then print("... all up to date."); end;
@@ -2542,67 +2607,17 @@ do -- [make pass 2 + 3] ========================================================
       return res;
     end;
     --
-    -- execute a nodes action and/or commandline.
-    local function buildNode(node)
-      if node == nil then return; end;
-      if not node.dirty and not always_make then node.done = true; end;
-      if node.done then return; end;
-      if node:is("FilesAndTargets") then 
-        if always_make or node.dirty then
-          -- construct command line
-          if node:is("GeneratedFile") and not node.command then
-            node.command = node.tool:build_command(node);
-          end;
-          if node.command and not quiet then 
-            if verbose then
-              print(node.command); 
-            else
-              local s = node.tool.CMD or node.command:match("^(%S+)%s");
-              s = s:upper() .. string.rep(" ", 6 - #s) .. " " .. fn_canonical(node[1]);
-              print(s);
-            end;
-          end;
-          if not just_print then 
-            if type(node.action) == "function" then 
-              if verbose then print("ACTION ".. node[1]); end;
-              if not node.action_done then 
-                node:action(); 
-                node.action_done = true;
-              end;
-            end;
-            if node.command then
-              fn_ensurePath(fn_splitpath(node[1]));
-              job_execute(node.command, 
-                function(ok, code, inf)
-                  if verbose or not ok then
-                    for l in inf:lines() do
-                      print(l);
-                    end;
-                  end;
-                  if not ok and strict then --abort ...
-                    jobs_clear();
-                    os.exit(code);
-                  end;
-                  node.done = true;
-                  node.dirty = nil;
-                end
-              );
-            end;
-          end;
-        end;
-      end;
-    end;
-    --
-    -- pass 3 new way. quick but overlapping targets.
-    -- may become the default in the future.
+    -- pass 3
     local function makeNode(node) 
       local targets  = clTargetList:new();
       local lvltbl = {};
       local maxlevel = 0;
+      --
       local function remember(node)
         --dprint("%s\t%s",node.level, node[1]);
         if not targets:find(node[1]) then targets:add(node); end;
       end;
+      --
       local function deduceLevel(node, lvl)
         lvl = lvl or 1; 
         if not node:is("TargetList Target") or node.action then
@@ -2638,6 +2653,56 @@ do -- [make pass 2 + 3] ========================================================
           if not (always_make or node.dirty) then return; end;
           remember(node);
           deduceLevel(node.deps, lvl);
+        end;
+      end;
+      -- execute a nodes action and/or commandline.
+      local function buildNode(node)
+        if node == nil then return; end;
+        if not node.dirty and not always_make then node.done = true; end;
+        if node.done then return; end;
+        if node:is("FilesAndTargets") then 
+          if always_make or node.dirty then
+            -- construct command line
+            if node:is("GeneratedFile") and not node.command then
+              node.command = node.tool:build_command(node);
+            end;
+            if node.command and not quiet then 
+              if verbose then
+                print(node.command); 
+              else
+                local s = node.tool.CMD or node.command:match("^(%S+)%s");
+                s = s:upper() .. string.rep(" ", 6 - #s) .. " " .. fn_canonical(node[1]);
+                print(s);
+              end;
+            end;
+            if not just_print then 
+              if type(node.action) == "function" then 
+                if verbose then print("ACTION ".. node[1]); end;
+                if not node.action_done then 
+                  node:action(); 
+                  node.action_done = true;
+                end;
+              end;
+              if node.command then
+                fn_ensurePath(fn_splitpath(node[1]));
+                job_execute(node.command, 
+                  function(ok, code, inf)
+                    if verbose or not ok then
+                      for l in inf:lines() do
+                        print(l);
+                      end;
+                    end;
+                    if not ok and strict then --abort ...
+                      jobs_clear();
+                      os.exit(code);
+                    end;
+                    node.done = true;
+                    node.dirty = nil;
+                  end
+                );
+              end;
+            end;
+          end;
         end;
       end;
       --
@@ -2737,7 +2802,7 @@ do -- [tools] ==================================================================
     local depfilename = fn_forceExt(TreeNode[1], ".d");
     local f = io.open(depfilename);
     if f then
-      dprint(depfilename);
+      --dprint(depfilename);
       local txt = {};
       for line in f:lines() do
         if line:find("^%s%S") then
@@ -2803,7 +2868,7 @@ do -- [tools] ==================================================================
     return concat(libs, " ");
   end;
   
-  function clTool:process_OPTIMIZE(TreeNode)
+  function clTool:process_OPTIMIZE()
     if Make.get_flag("DEBUG") then
       return "";
     else
@@ -2977,6 +3042,11 @@ do -- [tools] ==================================================================
     if par.defines then
       sources.defines:add(par.defines);
       par.defines = nil;
+    end;
+    -- incdir = ...
+    if par.incdir then
+      sources.incdir:add(par.incdir);
+      par.incdir = nil;
     end;
     -- prerequisites = ...
     if par.prerequisites then 
@@ -3230,17 +3300,8 @@ do -- [tools] ==================================================================
         end;
       elseif type(name) == "string" then
         -- setting the M32/64 flags only allowed for Toolchains but makescripts.
-        local function setM32()
-          if clMakeScript.M64 then quit("setM32(): M64 already set.", 0) end;
-          clMakeScript.M32 = true; 
-        end;
-        
-        local function setM64()
-          if clMakeScript.M32 then quit("setM64(): M32 already set.", 0) end;
-          clMakeScript.M64 = true; 
-        end;
-        Make.setM32 = setM32;
-        Make.setM64 = setM64;
+        clMake.setM32 = setM32;
+        clMake.setM64 = setM64;
         --
         if name:find("^tc_") or name:find("^"..TOOLCHAIN_PREFIX) then  
           require(name);
@@ -3252,8 +3313,8 @@ do -- [tools] ==================================================================
                     pcall(require, "tc_" .. name) or 
                     quit("* Cant find Toolchain '%s'.", name, 0);
         end;
-        Make.setM32 = nil;
-        Make.setM64 = nil;
+        clMake.setM32 = nil;
+        clMake.setM64 = nil;
       else
         error("clToolchains.load(): wrong parameter", 3);
       end;
@@ -3276,6 +3337,8 @@ end;
 --=== [toolchains & special targets] ===========================================
 --
 package.preload["tc_msc"]          = function(...) --TODO
+  --
+  if true then return; end;-- It is a pre alpha skeleton righ now. Better do nothing -.-
   --
   if not WINDOWS then return; end; -- MSC available on Windows only.
   --
@@ -3479,6 +3542,8 @@ end;
 
 package.preload["tc_gnu32"]        = function(...) 
   --
+  -- get the gnu toolchain and tweak a few parameters. Set the M32-flag.
+  --
   local Toolchain  = require "tc_gnu";
   local Make       = require "Make";
   --
@@ -3499,6 +3564,8 @@ package.preload["tc_gnu32"]        = function(...)
 end;
 
 package.preload["tc_gnu64"]        = function(...) 
+  --
+  -- get the gnu toolchain and tweak a few parameters. Set the M64-flag.
   --
   local Toolchain  = require "tc_gnu";
   local Make       = require "Make";
@@ -3586,6 +3653,24 @@ package.preload["tc_files"]        = function(...)
   end;
   Tool:add_group();
   --
+  Tool = tc:new_tool{"targetfile";
+    SRC_EXT = ".*";
+  };
+  function Tool:action_build(...)
+    local par = self:checkParam(...);
+    local src = self:getSources(par);
+    local tgt = Make.Targets:new_targetfile(par[1]);
+    tgt.deps = src;
+    par[1] = nil;
+    if par.action then
+      tgt.action = par.action;
+      par.action = nil;
+    end;
+    self:allParamsEaten(par);
+    return tgt;
+  end;
+  Tool:add_action("build");
+  --
   return tc;
 end;
 
@@ -3610,10 +3695,27 @@ package.preload["tc_repositories"] = function(...) --TODO
   --
   function Tool:action_checkout(...)
     local par = self:checkParam(...);
-    local dir = par[1] or par.odir;
+    local dir, url;
+    if par.odir then
+      dir = par.odir;
+      par.odir = nil;
+    else
+      dir = par[1];
+      remove(par, 1);
+    end;
+    if par.url and not par.src then 
+      par.src = par.url;
+      par.url = nil;
+    end;
+    if par.src then
+      url = par.src;
+      par.src = nil;
+    else
+      url = par[1];
+      remove(par, 1);
+    end;
     if type(dir) ~= "string" then quitMF("no valid odir given."); end;
-    local fnx = (function(a,b)return a.."."..b;end)(fn_splitpath(fn_forceExt(dir,".svn")));
-    local url =par[2] or par.src;
+    local fnx = dir..".svn";
     if type(url) ~= "string" then quitMF("no valid url given."); end;
     if fn.exists(dir) and not fn.isDir(dir) then quitMF("cant overwrite '%s'.", dir); end;
     local filetime_delta = os.time() - fn_filetime(fnx);
@@ -3664,6 +3766,10 @@ package.preload["tc_targets"]      = function(...)
   return nil; -- no new toolchain to return.
 end;
 --
+--require"tc_files" -- if a Toolchain dont load, require it here to see error messages
+--                  -- created by the toolchain. Normally they become required in a pcall()
+--                  -- and you can't see any errors.
+
 -- [main] ======================================================================
 --
 if REQUIRED then return Make; end;

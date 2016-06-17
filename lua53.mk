@@ -39,9 +39,8 @@ local LUAC    = c99.program {'luac53', odir=LUA_BIN, inputs={LUAC_C, LUAICN2, LU
 --
 local LUAINC  = file {src="lua.h lua.hpp luaconf.h lualib.h lauxlib.h", base=LUA_SRC_DIR, odir=LUA_IDIR}
 local LUADOC  = file {src="*", base=LUA_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/lua53/doc"}
-local LUAETC  = file {src="*.ico", base=LUA_SRC_DIR.."/../etc", odir=LUA_IDIR}
 --
-local LUA = group {LUAEXE, LUAC, LUAINC, LUADOC, LUAETC}
+local LUA = group {LUAEXE, LUAC, LUAINC, LUADOC}
 
 target("lua53", LUA)
 
@@ -52,15 +51,17 @@ define_need{'lua53',  -- lua53, dynamically linked libs
   incdir        = LUA_IDIR, 
   defines       = "LUA_BUILD_AS_DLL", 
   libdir        = LUA_BIN .. " " .. LUA_IDIR,
-  prerequisites = "lua53"
+  prerequisites = "lua53",
+  LUAVERSION    = LUA_VERSION
 };
 
 define_need{'lua53s', -- lua53, statically linked libs
-  libs          = "lua53",
+  libs          = "lua53.a",
   incdir        = LUA_IDIR, 
   --defines       = "LUA_COMPAT_MODULE", 
   libdir        = LUA_IDIR,
-  prerequisites = "lua53"
+  prerequisites = "lua53",
+  LUAVERSION    = LUA_VERSION
 };
 --
 -- aliases for compiling the modules

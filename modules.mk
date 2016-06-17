@@ -8,7 +8,7 @@ LUAROOT = LUAROOT or PWD
 LUA_BIN = LUA_BIN or LUAROOT.."/bin" -- install dir
 TEMPDIR = TEMPDIR or LUAROOT.."/tmp" -- dir for intermediate files
 --
-local LUAVER     = make.Needs"lua"[1]:match("(%d+)")
+local LUAVER     = make.Needs"lua".LUAVERSION
 local TEMPDIR    = TEMPDIR .. "/lua" .. LUAVER  -- dir for intermediate files
 local MODULES    = LUAROOT
 local LUA_ETCDIR = LUA_BIN.."/etc"

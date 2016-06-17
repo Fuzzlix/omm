@@ -17,17 +17,17 @@ Any critics, test reports, and contibutions are welcome.
 Inspired by and stealing code snippets from Steve Donovan's [lake][].  
 
 Using modified versions of 
-Roland Yonaba's [30log][] and 
-Gary V. Vaughan's [optparse][].
+Roland Yonaba's [30log][] and
+god6or@gmail.com's [os.cmdl][].
 
-Required 3rd party modules:
+Required 3rd party modules:  
 [luafilesystem][], [winapi][]/[luaposix][]
 
 Thanks also to Paul Kulchenko for his great [ZeroBraneStudio][].
 
 [lake]:            https://github.com/stevedonovan/Lake
 [30log]:           https://github.com/Yonaba/30log
-[optparse]:        https://github.com/gvvaughan/optparse)
+[os.cmdl]:         https://github.com/edartuz/lua-cmdl
 [luafilesystem]:   https://github.com/keplerproject/luafilesystem/
 [winapi]:          https://github.com/stevedonovan/winapi
 [luaposix]:        https://github.com/luaposix/luaposix/
@@ -196,8 +196,7 @@ This pass may error out if there are:
 All makescripts use the same sandbox environment and share
 all global valiables. This way a earlier scanned makefile
 may give informations to later scanned makefiles. There is 
-no need anymore, to pass values via the os environment. (off
-cause you still can.)
+no need anymore, to pass values via the os environment.
    
 ### Pass 2
 
@@ -241,42 +240,4 @@ In the 3rd pass, the lua lib becomes compiled with `"LUA_BUILD_AS_DLL LUA_COMPAT
 
 # TODO
 
-- Not well tested on linux yet. 
-  Still some changes needed to work on linux properly in all cases. (see: TODO comments)
-
-- optparse: better check for parameter values.  
-  For instance `omm -j default` takes "default" as a -j parameter but as target.
-  
-- better english in messages and comments.
-
-- More sophisticated needs handling
-    - OS specific needs
-        - What is a good syntax for?
-        - default/fallback needs?
-
-- msc toolchain.
-    - It is a poor tested skeleton right now.
-
-- lua toolchain. what are useful actions to implement and what is a good syntax for?  
-  .strip action? (remove comments and whitespaces from source)  
-  .glue action?  (preload lua modules in main source)  
-  .program?      (make self running executable.)  
-  .ldoc?         (generate documentation)  
-  
-- implement a patch ability?
-
-- how to deal with zip/... achives?
-
-- svn tool, repository toolchain. 
-  svn.checkout works, but need better ideas, HOW to deal with repositories at all.
-  svn.checkout is not part of the make tree now. Threfore it is being executed 
-  allways in pass 1. Should be executed in pass 3 only when the target requests it.
-  A patch ability would be nice to apply local changes to the downloded files.  
-  (Maybe better implement a "repository" _tool_, that handles svn, git, zip, .. downloads)
-  
-- correct silent/normal/verbose message print (doublecheck)
-
-- create a documentation.
-
-- create a test suite.
-
+- See comment in mk.lua

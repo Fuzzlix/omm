@@ -1,4 +1,4 @@
---- makefile for lua-5.2
+--- makefile for lua-5.1
 --
 if not WINDOWS then quit("We are not running on Windows?") end;
 --
@@ -27,10 +27,10 @@ end
 --
 local LUAICON = wresource {"lua51", src="icon", base=LUA_SRC_DIR, odir=TEMPDIR} -- icon resources
 local LUAICN2 = wresource {"luac51",src="icon", base=LUA_SRC_DIR, odir=TEMPDIR} -- icon resources
-local LUA_C   = c99 {"lua51", src="lua", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51:defines", cflags=CFLAGS}       -- lua program c source
-local LUAC_C  = c99 {"lua51", src="luac print", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51s:defines", cflags=CFLAGS}     -- luac program c source
-local LIB_C   = c99 {"lua51_s", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51s:defines", cflags=CFLAGS} -- static lib c source
-local DLL_C   = c99 {"lua51_d", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51:defines", cflags=CFLAGS}  -- dynamic lib c source
+local LUA_C   = c99 {"lua51", src="lua", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51:defines", cflags=CFLAGS}         -- lua program c source
+local LUAC_C  = c99 {"lua51", src="luac print", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51s:defines", cflags=CFLAGS} -- luac program c source
+local LIB_C   = c99 {"lua51_s", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51s:defines", cflags=CFLAGS}   -- static lib c source
+local DLL_C   = c99 {"lua51_d", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51:defines", cflags=CFLAGS}    -- dynamic lib c source
 --
 local LUALIB  = c99.library {'lua51', odir=LUA_IDIR, inputs=LIB_C}                     -- static lua runtime lib
 local LUADLL  = c99.shared  {'lua51', odir=LUA_BIN, inputs=DLL_C}                      -- dynamic lua runtime lib
@@ -52,7 +52,8 @@ define_need{'lua51',  -- lua51, dynamically linked libs
   incdir        = LUA_IDIR, 
   defines       = "LUA_BUILD_AS_DLL", 
   libdir        = LUA_BIN .. " " .. LUA_IDIR,
-  prerequisites = "lua51"
+  prerequisites = "lua51",
+  LUAVERSION    = LUA_VERSION
 };
 
 define_need{'lua51s', -- lua51, statically linked libs
@@ -60,7 +61,8 @@ define_need{'lua51s', -- lua51, statically linked libs
   incdir        = LUA_IDIR, 
   --defines       = "LUA_COMPAT_MODULE", 
   libdir        = LUA_IDIR,
-  prerequisites = "lua51"
+  prerequisites = "lua51",
+  LUAVERSION    = LUA_VERSION
 };
 --
 make.Needs "lua = lua51"   -- need alias.
