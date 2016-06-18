@@ -1,4 +1,3 @@
-#!/usr/bin/env lua
 --[[ **One More Maketool**
 
 ## MK, a lua based extensible build engine.
@@ -88,7 +87,7 @@ SOFTWARE.
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --D = require"D"; -- debug print utility
 --
-local VERSION = "mk 0.2-beta-16/06/17\n  A lua based extensible build engine.";
+local VERSION = "mk 0.2-beta-16/06/18\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -760,7 +759,6 @@ end;
 --
 -- [] ==========================================================================
 --
-local REQUIRED = pcall(debug.getlocal, 4, 1);
 local class    = require "33log";
 local lfs      = require "lfs";
 local attributes, touch, mkdir = lfs.attributes, lfs.touch, lfs.mkdir;
@@ -1604,11 +1602,11 @@ do
       descr = "Don't echo commands executed.", 
       blockedby = {"printhelp", "printversion", "silent", "verbose"},
     },
-    { tag = "question", 
-      cmd = {'-q', "--question"}, 
-      descr = "Run no recipe; exit status says if up to date.", 
-      blockedby = {"printhelp", "printversion", "question"},
-    },
+    --{ tag = "question", 
+    --  cmd = {'-q', "--question"}, 
+    --  descr = "Run no recipe; exit status says if up to date.", 
+    --  blockedby = {"printhelp", "printversion", "question"},
+    --},
     { tag = "jobs", 
       cmd = {'-j', "--jobs"}, 
       descr = 'Run N jobs parallel. (default: # of cores)',
@@ -1643,7 +1641,7 @@ do
       descr = "Display this help, then exit.", 
       blockedby = {"build", "makefile", "dont_execute", "defines", "mode", 
                    "import_needs", "export_needs", "use_needs", "aliases", 
-                   "verbose", "silent", "question", "jobs", "toolchain", 
+                   "verbose", "silent", "question", "jobs", 
                    "targets", "printversion", "printhelp"},
     },
     --
@@ -2562,7 +2560,7 @@ end;
 do -- [make pass 2 + 3] ========================================================
   --
   function runMake()
-    local always_make = Make.options.always_make;
+    local always_make = Make.options.build;
     local just_print  = Make.options.just_print;
     local quiet       = Make.options.quiet;
     local verbose     = Make.options.verbose;
@@ -3772,5 +3770,4 @@ end;
 
 -- [main] ======================================================================
 --
-if REQUIRED then return Make; end;
 Make(arg);
