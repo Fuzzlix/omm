@@ -1,4 +1,4 @@
-/* wstub.c V.16/06/17, universal Console/Win32 Loader.
+/* loader.c V.16/06/18, universal Console/Win32 Loader.
  * merged ideas from;
  * - srlua.c         (Luiz Henrique de Figueiredo <lhf@tecgraf.puc-rio.br>)
  * - lua.c           (lua5.2.3 Lua.org, PUC-Rio, Brazil (http://www.lua.org))
@@ -15,7 +15,9 @@
  *
  * tested so far with:
  * - luaJit 2.0.3
- * - lua 5.2.3
+ * - lua 5.1.5
+ * - lua 5.2.4
+ * - lua 5.3.3
  */
 #define GLUE_LOADER
 
@@ -66,6 +68,26 @@ static int report(lua_State *L, int status) {
   return status;
 }
 
+#if LUA_VERSION_NUM  == 501
+static int traceback (lua_State *L) {
+  if (!lua_isstring(L, 1))  /* 'message' not a string? */
+    return 1;  /* keep it intact */
+  lua_getfield(L, LUA_GLOBALSINDEX, "debug");
+  if (!lua_istable(L, -1)) {
+    lua_pop(L, 1);
+    return 1;
+  }
+  lua_getfield(L, -1, "traceback");
+  if (!lua_isfunction(L, -1)) {
+    lua_pop(L, 2);
+    return 1;
+  }
+  lua_pushvalue(L, 1);  /* pass error message */
+  lua_pushinteger(L, 2);  /* skip this function and traceback */
+  lua_call(L, 2, 1);  /* call debug.traceback */
+  return 1;
+} 
+#else
 static int traceback (lua_State *L) {
   const char *msg = lua_tostring(L, 1);
   if (msg)
@@ -76,6 +98,7 @@ static int traceback (lua_State *L) {
   }
   return 1;
 }
+#endif
 
 #ifdef GLUE_LOADER
 #define GLUESIG     "%%glue:L"
