@@ -87,7 +87,7 @@ SOFTWARE.
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --D = require"D"; -- debug print utility
 --
-local VERSION = "mk 0.2-beta-16/06/18\n  A lua based extensible build engine.";
+local VERSION = "mk 0.2-beta-16/06/19\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -106,12 +106,12 @@ local MAKEFILENAME = "makefile.mk"; -- default makefile name.
 --[[ How to prefix a external toolchain name.  
 This prefix may trigger a search in a sub folder or simply be a filename prefix.
 The predefined default will search a non-internal toolchain "lua" in a file
-`"omm_lua.lua"` and afterward in `"tc_lua.lua"`. This way it becomes possible to 
+`"mkt_lua.lua"` and afterward in `"tc_lua.lua"`. This way it becomes possible to 
 override/extend the preloaded toolchains with self written external toolchains.
 The internal prefix `"tc_"` is hardcoded and can be used to adress the preloaded 
 module directly. eg. `require "tc_gnu"`
 --]]--
-local TOOLCHAIN_PREFIX = "omm_";
+local TOOLCHAIN_PREFIX = "mkt_";
 --
 -- [oop, ...] ==================================================================
 --
@@ -2168,6 +2168,9 @@ do
   clFile.concat     = function(self) -- for compatibility with `clTargetList` filename concatenation.
     return self[1];
   end;
+  clFile.canonical  = function(self)
+    return fn_canonical(self[1]);
+  end;
   --
   clSourceFile = clFile:subclass{
     __classname  = "SourceFile";
@@ -2187,6 +2190,7 @@ do
   };
   
   clSourceFile.needsBuild = function(self)
+    if self._scanned then return self.dirty, self:filetime(); end;
     if not self:exists() then
       quit("make(): sourcefile '%s' does not exist.", self[1], 0); 
     end;
@@ -2194,6 +2198,7 @@ do
     if self.deps then dirty, modtime = self.deps:needsBuild(); end;
     self.dirty = self.dirty or dirty or filetime < modtime;
     --dprint(("clSourceFile.needsBuild():    %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
+    self._scanned = true;
     return self.dirty, max(filetime, modtime);
   end;
   --
@@ -2226,13 +2231,15 @@ do
   };
   
   clGeneratedFile.needsBuild = function(self)
+    if self._scanned then return self.dirty, self:filetime(); end;
     local dirty, modtime = self:presDirty();
     local time = self:filetime() or -1;
     if self.deps then
       dirty, modtime = self.deps:needsBuild();
-      self.dirty = dirty or (time < modtime);
+      self.dirty = dirty or time == -1 or (time < modtime);
     end;
     --dprint(("clGeneratedFile.needsBuild(): %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
+    self._scanned = true;
     return self.dirty or (not self:is("TempFile") and self.dirty), max(time, modtime);
   end;
   
@@ -2255,6 +2262,7 @@ do
   };
   
   clTempFile.needsBuild = function(self)
+    if self._scanned then return self.dirty, self:filetime(); end;
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
       quit("make(): file '%s' does not exist.", self[1], 0); 
     end;
@@ -2267,6 +2275,7 @@ do
       self.dirty = self.dirty or dirty or (time < modtime);
     end;
     --dprint(("clTempFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
+    self._scanned = true;
     return false, max(time, modtime);
   end;
   
@@ -2561,10 +2570,10 @@ do -- [make pass 2 + 3] ========================================================
   --
   function runMake()
     local always_make = Make.options.build;
-    local just_print  = Make.options.just_print;
+    local just_print  = Make.options.dont_execute;
     local quiet       = Make.options.quiet;
     local verbose     = Make.options.verbose;
-    local strict      = not Make.options.nostrict;
+    local strict      = not Make.options.nostrict; --TODO:
     local targets;
     --
     local function getTarget()
@@ -2668,8 +2677,8 @@ do -- [make pass 2 + 3] ========================================================
               if verbose then
                 print(node.command); 
               else
-                local s = node.tool.CMD or node.command:match("^(%S+)%s");
-                s = s:upper() .. string.rep(" ", 6 - #s) .. " " .. fn_canonical(node[1]);
+                local s = node.tool.CMD or fn_basename(fn_splitext(node.command:match("^(%S+)%s")));
+                s = s:upper() .. string.rep(" ", 7 - #s) .. " " .. fn_canonical(node[1]);
                 print(s);
               end;
             end;
@@ -2947,7 +2956,7 @@ do -- [tools] ==================================================================
   
   function clTool:build_command(TreeNode)
     local result = pick(self["command_"..(TreeNode.type or "")], self.command);
-    for j in result:gmatch("%$(%u*)") do
+    for j in result:gmatch("%$(%u+)") do
       result = result:gsub("%$"..j, (self["process_"..j](self, TreeNode)));
     end;
     return result;--:gsub("%s+", " ");
@@ -3046,6 +3055,24 @@ do -- [tools] ==================================================================
       sources.incdir:add(par.incdir);
       par.incdir = nil;
     end;
+    -- deps = ...
+    if par.deps then 
+      if class(par.deps, "FilesAndTargets") then
+        par.deps = {par.deps};
+      end;
+      if type(par.deps) == "table" then
+        for _, ts in ipairs(par.deps) do
+          if class(ts, "FilesAndTargets") then
+            sources.prerequisites:add(ts);
+          else
+            quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
+          end;
+        end;
+      else
+        quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
+      end;
+      par.deps = nil;
+    end;
     -- prerequisites = ...
     if par.prerequisites then 
       if type(par.prerequisites) == "string" then
@@ -3098,19 +3125,25 @@ do -- [tools] ==================================================================
         local fn = fn_forceExt(fn_basename(sf[1]),self.OBJ_EXT or self.toolchain.OBJ_EXT);
         if type(par[1]) == "string" then fn = par[1] .. "_" .. fn; end;
         local of = result:new_tempfile(par.odir, fn);
-        of.deps    = sf;
-        of.tool    = self;
-        of.type    = "obj";
-        of.base    = sources.base;
-        of.defines = sources.defines;
-        of.cflags  = sources.cflags;
-        of.incdir  = sources.incdir;
-        of.libdir  = sources.libdir;
-        of.libs    = sources.libs;
-        of.needs   = sources.needs;
-        of.from    = sources.from;
+        of.deps          = sf;
+        of.tool          = self;
+        of.type          = "obj";
+        of.base          = sources.base;
+        of.defines       = sources.defines;
+        of.cflags        = sources.cflags;
+        of.incdir        = sources.incdir;
+        of.libdir        = sources.libdir;
+        of.libs          = sources.libs;
+        of.needs         = sources.needs;
+        of.from          = sources.from;
+        of.prerequisites = sources.prerequisites;
         if not Make.get_flag("NODEPS") then
-          of.prerequisites = self:readDepFile(of);
+          local p = self:readDepFile(of)
+          if p then 
+            for f in p() do
+              if not of.prerequisites:find(f[1]) then of.prerequisites:add(f); end;
+            end;
+          end;
         end;
       end;
       if par[1] ~= nil then remove(par, 1); end;
@@ -3127,16 +3160,17 @@ do -- [tools] ==================================================================
     local par = self:checkParam(...);
     local sources = self:getSources(par);
     local target = clTargetFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.EXE_EXT));
-    target.deps    = sources;
-    target.defines = sources.defines;
-    target.cflags  = sources.cflags;
-    target.incdir  = sources.incdir;
-    target.libdir  = sources.libdir;
-    target.libs    = sources.libs;
-    target.needs   = sources.needs;
-    target.from    = sources.from;
-    target.tool    = self;
-    target.type    = "prog";
+    target.deps          = sources;
+    target.defines       = sources.defines;
+    target.cflags        = sources.cflags;
+    target.incdir        = sources.incdir;
+    target.libdir        = sources.libdir;
+    target.libs          = sources.libs;
+    target.needs         = sources.needs;
+    target.from          = sources.from;
+    target.prerequisites = sources.prerequisites;
+    target.tool          = self;
+    target.type          = "prog";
     if par[1] ~= nil then remove(par, 1); end;
     par.odir = nil;
     self:allParamsEaten(par);
@@ -3147,16 +3181,17 @@ do -- [tools] ==================================================================
     local par = self:checkParam(...);
     local sources = self:getSources(par);
     local target = clTargetFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.DLL_EXT));
-    target.deps = sources;
-    target.defines = sources.defines;
-    target.cflags  = sources.cflags;
-    target.incdir  = sources.incdir;
-    target.libdir  = sources.libdir;
-    target.libs    = sources.libs;
-    target.needs   = sources.needs;
-    target.from    = sources.from;
-    target.tool    = self;
-    target.type    = "dlib";
+    target.deps          = sources;
+    target.defines       = sources.defines;
+    target.cflags        = sources.cflags;
+    target.incdir        = sources.incdir;
+    target.libdir        = sources.libdir;
+    target.libs          = sources.libs;
+    target.needs         = sources.needs;
+    target.from          = sources.from;
+    target.prerequisites = sources.prerequisites;
+    target.tool          = self;
+    target.type          = "dlib";
     if par[1] ~= nil then remove(par, 1); end;
     par.odir = nil;
     self:allParamsEaten(par);
@@ -3167,15 +3202,16 @@ do -- [tools] ==================================================================
     local par = self:checkParam(...);
     local sources = self:getSources(par);
     local target = clTargetFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.LIB_EXT));
-    target.deps = sources;
-    target.defines = sources.defines;
-    target.incdir  = sources.incdir;
-    target.libdir  = sources.libdir;
-    target.libs    = sources.libs;
-    target.needs   = sources.needs;
-    target.from    = sources.from;
-    target.tool    = self;
-    target.type    = "slib";
+    target.deps          = sources;
+    target.defines       = sources.defines;
+    target.incdir        = sources.incdir;
+    target.libdir        = sources.libdir;
+    target.libs          = sources.libs;
+    target.needs         = sources.needs;
+    target.from          = sources.from;
+    target.prerequisites = sources.prerequisites;
+    target.tool          = self;
+    target.type          = "slib";
     if par[1] ~= nil then remove(par, 1); end;
     par.odir = nil;
     self:allParamsEaten(par);
@@ -3635,6 +3671,7 @@ package.preload["tc_files"]        = function(...)
   Tool = tc:new_tool{"group";
     SRC_EXT = ".*";
   };
+  
   function Tool:action_group(...)
     local par = self:checkParam(...);
     if not par.inputs then
@@ -3649,16 +3686,27 @@ package.preload["tc_files"]        = function(...)
     self:allParamsEaten(par);
     return res;
   end;
+  
   Tool:add_group();
   --
   Tool = tc:new_tool{"targetfile";
     SRC_EXT = ".*";
   };
-  function Tool:action_build(...)
+  
+  function Tool:action_build(...) --TODO:
     local par = self:checkParam(...);
     local src = self:getSources(par);
     local tgt = Make.Targets:new_targetfile(par[1]);
-    tgt.deps = src;
+    tgt.deps          = src;
+    tgt.defines       = src.defines;
+    tgt.cflags        = src.cflags;
+    tgt.incdir        = src.incdir;
+    tgt.libdir        = src.libdir;
+    tgt.libs          = src.libs;
+    tgt.needs         = src.needs;
+    tgt.from          = src.from;
+    tgt.prerequisites = src.prerequisites;
+    tgt.tool          = self;
     par[1] = nil;
     if par.action then
       tgt.action = par.action;
@@ -3667,7 +3715,19 @@ package.preload["tc_files"]        = function(...)
     self:allParamsEaten(par);
     return tgt;
   end;
+  
   Tool:add_action("build");
+  function Tool:build_command(TreeNode)
+    local result;
+    if type(TreeNode.action) == "string" then
+      result = TreeNode.action;
+      for j in result:gmatch("%$(%u+)") do
+        result = result:gsub("%$"..j, (self["process_"..j](self, TreeNode)));
+      end;
+      TreeNode.action = nil;
+    end;
+    return result;--:gsub("%s+", " ");
+  end;
   --
   return tc;
 end;
@@ -3764,10 +3824,10 @@ package.preload["tc_targets"]      = function(...)
   return nil; -- no new toolchain to return.
 end;
 --
---require"tc_files" -- if a Toolchain dont load, require it here to see error messages
---                  -- created by the toolchain. Normally they become required in a pcall()
---                  -- and you can't see any errors.
-
+--require "tc_files" -- if a Toolchain dont load, require it here to see error messages
+--                   -- created by the toolchain. Normally they become required in 
+--                   -- a pcall() and you can't see any errors.
+--
 -- [main] ======================================================================
 --
 Make(arg);
