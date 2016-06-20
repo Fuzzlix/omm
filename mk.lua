@@ -1958,12 +1958,12 @@ do -- [Make] ===================================================================
     cmd = cmd or {};
     if type(cmd) == "string" then cmd = split(cmd); end;
     if MAKELEVEL == 0 then -- parse the command line ...
-      makefile, target = parseCommandline(cmd);
-      self.target = target;
-      makefile = makefile or MAKEFILENAME;
       -- Load preloaded toolchains.
       Make.Tools:load("gnu msc files targets repositories");
       --
+      makefile, target = parseCommandline(cmd);
+      self.target = target;
+      makefile = makefile or MAKEFILENAME;
     else
       makefile = cmd[1];
     end;
@@ -3795,6 +3795,7 @@ package.preload["tc_repositories"] = function(...) --TODO
   --
   local Tool = tc:new_tool{"svn"};
   --
+  local dirlist = {};
   function Tool:action_checkout(...)
     local par = self:checkParam(...);
     local dir, url;
@@ -3805,6 +3806,7 @@ package.preload["tc_repositories"] = function(...) --TODO
       dir = par[1];
       remove(par, 1);
     end;
+    if dirlist[dir] then return; end; -- alredy checked out
     if par.url and not par.src then 
       par.src = par.url;
       par.url = nil;
@@ -3818,10 +3820,12 @@ package.preload["tc_repositories"] = function(...) --TODO
     end;
     if type(dir) ~= "string" then quitMF("no valid odir given."); end;
     local fnx = dir..".svn";
-    if type(url) ~= "string" then quitMF("no valid url given."); end;
-    if fn.exists(dir) and not fn.isDir(dir) then quitMF("cant overwrite '%s'.", dir); end;
-    local filetime_delta = os.time() - fn_filetime(fnx);
-    if filetime_delta < 86400 then return; end; -- checkout at least 24 hours old ?
+    if not Make.options.forcescheckout then
+      if type(url) ~= "string" then quitMF("no valid url given."); end;
+      if fn.exists(dir) and not fn.isDir(dir) then quitMF("cant overwrite '%s'.", dir); end;
+      local filetime_delta = os.time() - fn_filetime(fnx);
+      if filetime_delta < 86400 then return; end; -- checkout at least 24 hours old ?
+    end;
     local cmd = "svn checkout " .. url .. " " .. dir;
     if Make.options.verbose then
       print(cmd);
@@ -3832,6 +3836,7 @@ package.preload["tc_repositories"] = function(...) --TODO
     if not utils.execute(cmd, Make.options.quiet) then
       quitMF("svn checkout failed.");
     else 
+      dirlist[dir] = true;
       local f = io.open(fnx,"w+");
       if f then
         f:write(("%s checked out with:\n%s ."):format(dir, cmd));
@@ -3841,6 +3846,16 @@ package.preload["tc_repositories"] = function(...) --TODO
     end;
   end;
   Tool:add_action("checkout");
+  --
+  -- add toolchain specific commandline switches
+  local cmdl = require "Cmdl";
+  table.insert(cmdl.argsDef,
+    { tag = "forcescheckout", 
+      cmd = {'-fc', "--force-checkout"}, 
+      descr = "force all svn checkouts. (default: every 24 hours)",
+      blockedby = {"printhelp", "printversion"},
+    }
+  );
   --
   return tc;
 end;
