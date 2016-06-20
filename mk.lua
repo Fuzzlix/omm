@@ -87,7 +87,7 @@ SOFTWARE.
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --D = require"D"; -- debug print utility
 --
-local VERSION = "mk 0.2-beta-16/06/19\n  A lua based extensible build engine.";
+local VERSION = "mk 0.2-beta-16/06/20\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -2190,7 +2190,7 @@ do
   };
   
   clSourceFile.needsBuild = function(self)
-    if self._scanned then return self.dirty, self:filetime(); end;
+    if self._scanned then return self.dirty, self._mtime; end;
     if not self:exists() then
       quit("make(): sourcefile '%s' does not exist.", self[1], 0); 
     end;
@@ -2199,7 +2199,8 @@ do
     self.dirty = self.dirty or dirty or filetime < modtime;
     --dprint(("clSourceFile.needsBuild():    %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     self._scanned = true;
-    return self.dirty, max(filetime, modtime);
+    self._mtime = max(filetime, modtime)
+    return self.dirty, self._mtime;
   end;
   --
   clIncludeFile = clFile:subclass{
@@ -2231,16 +2232,18 @@ do
   };
   
   clGeneratedFile.needsBuild = function(self)
-    if self._scanned then return self.dirty, self:filetime(); end;
+    if self._scanned then return self.dirty, self._mtime; end;
     local dirty, modtime = self:presDirty();
     local time = self:filetime() or -1;
+    self.dirty = dirty or time == -1 or (time < modtime);
     if self.deps then
       dirty, modtime = self.deps:needsBuild();
       self.dirty = dirty or time == -1 or (time < modtime);
     end;
     --dprint(("clGeneratedFile.needsBuild(): %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     self._scanned = true;
-    return self.dirty or (not self:is("TempFile") and self.dirty), max(time, modtime);
+    self._mtime = max(time, modtime)
+    return self.dirty or (not self:is("TempFile") and self.dirty), self._mtime;
   end;
   
   clGeneratedFile.delete     = function(self)
@@ -2262,7 +2265,7 @@ do
   };
   
   clTempFile.needsBuild = function(self)
-    if self._scanned then return self.dirty, self:filetime(); end;
+    if self._scanned then return self.dirty, self._mtime; end;
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
       quit("make(): file '%s' does not exist.", self[1], 0); 
     end;
@@ -2276,7 +2279,8 @@ do
     end;
     --dprint(("clTempFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     self._scanned = true;
-    return false, max(time, modtime);
+    self._mtime = max(time, modtime)
+    return false, self._mtime;
   end;
   
   clTempFile.delete     = function(self)
