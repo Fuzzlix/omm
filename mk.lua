@@ -3730,7 +3730,47 @@ package.preload["tc_files"]        = function(...)
       end;
       TreeNode.action = nil;
     end;
-    return result;--:gsub("%s+", " ");
+    return result;
+  end;
+  --
+  Tool = tc:new_tool{"tempfile";
+    SRC_EXT = ".*";
+  };
+  
+  function Tool:action_build(...) --TODO:
+    local par = self:checkParam(...);
+    local src = self:getSources(par);
+    local tgt = Make.Targets:new_tempfile(par[1]);
+    tgt.deps          = src;
+    tgt.defines       = src.defines;
+    tgt.cflags        = src.cflags;
+    tgt.incdir        = src.incdir;
+    tgt.libdir        = src.libdir;
+    tgt.libs          = src.libs;
+    tgt.needs         = src.needs;
+    tgt.from          = src.from;
+    tgt.prerequisites = src.prerequisites;
+    tgt.tool          = self;
+    par[1] = nil;
+    if par.action then
+      tgt.action = par.action;
+      par.action = nil;
+    end;
+    self:allParamsEaten(par);
+    return tgt;
+  end;
+  
+  Tool:add_action("build");
+  function Tool:build_command(TreeNode)
+    local result;
+    if type(TreeNode.action) == "string" then
+      result = TreeNode.action;
+      for j in result:gmatch("%$(%u+)") do
+        result = result:gsub("%$"..j, (self["process_"..j](self, TreeNode)));
+      end;
+      TreeNode.action = nil;
+    end;
+    return result;
   end;
   --
   return tc;
