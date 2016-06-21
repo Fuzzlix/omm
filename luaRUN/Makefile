@@ -4,7 +4,7 @@ default: all
 
 #========================================= [start user config] ==
 # LUAVER := 51|52|53 (luaJit=51)
-LUAVER	?=	52
+LUAVER	?=	51
 #
 # LUAROOT: your lua root folder.
 LUAROOT	?=	../_install32
@@ -16,7 +16,7 @@ LUAINCL ?=	$(LUAROOT)/include/$(LUAVER)
 #PRELOAD_MODS ?= lfs lpeg wx winapi lsqlite3 lanes.core socket.core mime.core
 #PRELOAD_MODS ?= lfs lpeg winapi lsqlite3 lanes.core socket.core mime.core
 #PRELOAD_MODS ?= lpeg winapi socket.core mime.core
-PRELOAD_MODS ?= lfs winapi
+PRELOAD_MODS ?= lfs winapi lpeg
 #
 #=========================================== [end user config] ==
 
