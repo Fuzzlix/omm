@@ -1,91 +1,32 @@
---[[ **One More Maketool**
+--[[--
+##MK, a lua based extensible build engine.
 
-## MK, a lua based extensible build engine.
-
-Inspired by and stealing code snippets from Steve Donovan's [lake].  
+Inspired by and stealing code snippets from Steve Donovan's [lake][].  
 
 Using modified versions of 
-Roland Yonaba's [30log].
-god6or@gmail.com's [os.cmdl]
+Roland Yonaba's [30log][] and
+god6or@gmail.com's [os.cmdl][].
 
-required 3rd party modules:
-[luafilesystem], [winapi] / [luaposix]
+Required 3rd party modules:
+[luafilesystem][], [winapi][] / [luaposix][]
 
-(best viewed with a folding editor like [ZBS].)
+(best viewed with a folding editor like [ZBS][].)
 
 [lake]:          https://github.com/stevedonovan/Lake
 [30log]:         https://github.com/Yonaba/30log
-[os.cmdl]        https://github.com/edartuz/lua-cmdl
+[os.cmdl]:       https://github.com/edartuz/lua-cmdl
 [luafilesystem]: https://github.com/keplerproject/luafilesystem/
 [winapi]:        https://github.com/stevedonovan/winapi
 [luaposix]:      https://github.com/luaposix/luaposix/
 [ZBS]:           https://github.com/pkulchenko/ZeroBraneStudio
 
-copyright (C) 2016 [Ulrich Schmidt](mailto:u.sch.zw@gmx.de)
-
-The MIT License (MIT)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
+@author Ulrich Schmidt
+@copyright 2016
+@license MIT/X11
+@script mk
 --]]--------------------------------------------------------
---
---[[ **TODO:**
 
-- Not well tested on linux yet. 
-  Still some changes needed to work on linux properly in all cases. (see: TODO comments)
-
-- better english in messages and comments.
-
-- More sophisticated needs handling.
-  - OS specific needs
-    - What is a good syntax for?
-    - default/fallback needs?
-  - Need aliases (done)
-
-- msc toolchain.
-  - It is a untested skeleton right now.
-
-- lua toolchain. what are useful actions to implement and what is a good syntax for?
-  .strip action? (remove comments and whitespaces from source)
-  .glue action?  (preload lua modules in main source)
-  .program?      (make self running executable.)
-  .ldoc?         (generate documentation)
-  
-- implement a patch ability.
-
-- how to deal with zip/... achives?
-
-- svn toolchain. 
-  svn.checkout works, but need better ideas, HOW to deal with repositories at all.
-  svn.checkout is not part of the make tree now. Threfore it is being executed 
-  allways in pass 1. Should be executed in pass 3 only when the target requests it.
-  A patch ability would be nice to apply local changes to the downloded files.
-  - Maybe better implement a "repository" tool, that handles svn, git, zip, .. downloads
-  
-- create a documentation.
-
-- create a test suite.
-
---]]-------------------------------------------------------
---
---_DEBUG = true; -- enable some debugging output. see: dprint()
---D = require"D"; -- debug print utility
+_DEBUG = true; -- enable some debugging output. see: dprint()
 --
 local VERSION = "mk 0.2-beta-16/06/20\n  A lua based extensible build engine.";
 local USAGE   = [=[
@@ -110,13 +51,12 @@ The predefined default will search a non-internal toolchain "lua" in a file
 override/extend the preloaded toolchains with self written external toolchains.
 The internal prefix `"tc_"` is hardcoded and can be used to adress the preloaded 
 module directly. eg. `require "tc_gnu"`
---]]--
+--]]
 local TOOLCHAIN_PREFIX = "mkt_";
 --
 -- [oop, ...] ==================================================================
 --
 package.preload["33log"] = function(...) 
-  
   local pairs, ipairs, type, getmetatable, rawget, select =
         pairs, ipairs, type, getmetatable, rawget, select;
   local insert,       concat,       remove = 
@@ -446,10 +386,6 @@ package.preload["Cmdl"]  = function(...)
              str   (string - default), 
              int   (integer - bin/oct/hex/dec), 
              float (float), integer/float arguments.
-             TODO: file_read       - file name - existing and readable. 
-             TODO: file_write      - file name - existing and writable.
-             TODO: file_create     - file name - writable.
-             TODO: file_savecreate - file name - non existing and writable.
          min,max - allowed numeric range (for int/float) or string length range (for strings)
          delim (char) - alows multiple values in one parameter separated by <char>.
                         this cmd alows 1 parameter definitions only.
@@ -1433,7 +1369,7 @@ end;
 --
 do -- [error handling] =========================================================
   --
-  local scriptfile = REQUIRED and select(2, ...) or arg[0];
+  local scriptfile = arg[0];
   --dprint(scriptfile);
   --
   function warning(reason, ...)
@@ -1808,7 +1744,8 @@ end;
 --
 local clMakeScript, MakeScript, clMake;
 do -- [MakeScript Sandbox] =====================================================
-  --
+  --- makescript class.
+  -- @type clMakeScript
   clMakeScript = class.Base:subclass{
     __classname  = "MakeScript";
     __call  = function(self, filename)
@@ -1959,7 +1896,7 @@ do -- [Make] ===================================================================
     if type(cmd) == "string" then cmd = split(cmd); end;
     if MAKELEVEL == 0 then -- parse the command line ...
       -- Load preloaded toolchains.
-      Make.Tools:load("gnu msc files targets repositories");
+      Make.Tools:load("gnu msc files targets repositories lua");
       --
       makefile, target = parseCommandline(cmd);
       self.target = target;
@@ -1985,6 +1922,7 @@ do -- [Make] ===================================================================
     --
     if MAKELEVEL == 0 then runMake(); end; -- do the job ...
   end;
+  clMake.LUAVERSION = luaVersion();
   --
   Make       = clMake:singleton();
   --
@@ -3373,7 +3311,13 @@ do -- [tools] ==================================================================
 end;
 --
 --=== [toolchains & special targets] ===========================================
---
+
+--- Tools and Actions.
+-- Make scripts run in a sandbox with a limited set of lua libraries and 
+-- some usefull lua objects named tools.
+-- All parameters needs to be stored in a list. The simplest way to do so is by
+-- using "{...}" instead of "(...)".
+-- @section Tools
 package.preload["tc_msc"]          = function(...) --TODO
   --
   if true then return; end;-- It is a pre alpha skeleton righ now. Better do nothing -.-
@@ -3466,25 +3410,12 @@ package.preload["tc_msc"]          = function(...) --TODO
   };
   Tool:add_group();
   --
-  Tool = Toolchain:new_tool{ "asm",
-    SRC_EXT     = ".s",
-    CMD         = "ASM",
-    PROG        = "as",
-    command     = "$PREFIX$PROG $OPTIMIZE $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-    command_dep = "$PREFIX$PROG -MD $DEPFILE $OPTIONS $DEFINES $(SOURCES)",
-  };
-  Tool:add_group();
-  Tool:add_program();
-  Tool:add_shared();
-  Tool:add_library();
-  --
-  
   return Toolchain;
   
 end;
 
 package.preload["tc_gnu"]          = function(...) 
-  
+  --
   local Make = require "Make";
   --
   local Toolchains = Make.Tools;
@@ -3697,7 +3628,7 @@ package.preload["tc_files"]        = function(...)
     SRC_EXT = ".*";
   };
   
-  function Tool:action_build(...) --TODO:
+  function Tool:action_build(...)
     local par = self:checkParam(...);
     local src = self:getSources(par);
     local tgt = Make.Targets:new_targetfile(par[1]);
@@ -3737,7 +3668,7 @@ package.preload["tc_files"]        = function(...)
     SRC_EXT = ".*";
   };
   
-  function Tool:action_build(...) --TODO:
+  function Tool:action_build(...)
     local par = self:checkParam(...);
     local src = self:getSources(par);
     local tgt = Make.Targets:new_tempfile(par[1]);
@@ -3776,6 +3707,34 @@ package.preload["tc_files"]        = function(...)
   return tc;
 end;
 
+package.preload["tc_lua"]          = function(...) --TODO
+  --
+  local Make       = require "Make";
+  local Toolchains = Make.Tools;
+  local choose     = Make.utils.choose;
+  local WINDOWS    = Make.WINDOWS;
+  --
+  local tc = Toolchains:new_toolchain{__satisfy = {"lua"}};
+  --
+  local Tool = tc:new_tool{ "lua",
+    SRC_EXT      = ".lua",
+    OUT_EXT      = ".*",
+  };
+  
+  function Tool:action_run(...)
+    local par = self:checkParam(...);
+    local sources = self:getSources(par);
+    if type(par.odir) ~= "string" then quitMF("file.copy(): 'odir' is missing."); end;
+    local targets = clTargetList:new();
+    --TODO:
+    return targets;
+  end;
+  
+  Tool:add_action("run");
+  --
+  return tc;
+end;
+
 package.preload["tc_repositories"] = function(...) --TODO
   --
   local Make       = require "Make";
@@ -3785,7 +3744,7 @@ package.preload["tc_repositories"] = function(...) --TODO
   local choose     = utils.choose;
   local warning    = Make.warning
   local WINDOWS    = Make.WINDOWS;
-  
+  --
   if not utils.which("svn"..choose(WINDOWS, ".exe", "")) then 
     warning("'svn' not found in path.");
     return; 
@@ -3842,7 +3801,6 @@ package.preload["tc_repositories"] = function(...) --TODO
         f:write(("%s checked out with:\n%s ."):format(dir, cmd));
         f:close();
       end;
-      
     end;
   end;
   Tool:add_action("checkout");
@@ -3861,7 +3819,6 @@ package.preload["tc_repositories"] = function(...) --TODO
 end;
 
 package.preload["tc_targets"]      = function(...)
-  --
   local Make       = require "Make";
   local Targets    = Make.Targets;
   --
@@ -3874,11 +3831,11 @@ package.preload["tc_targets"]      = function(...)
     Make.ProgsAndLibs:delete();
   end;
   --
-  local t;
-  t = Targets:new_target("clean",{action = action_clean});
-  t.dirty = true; -- allways execute
-  t = Targets:new_target("CLEAN",{action = action_CLEAN});
-  t.dirty = true; -- allways execute
+  local tgt;
+  tgt = Targets:new_target("clean",{action = action_clean});
+  tgt.dirty = true; -- allways execute
+  tgt = Targets:new_target("CLEAN",{action = action_CLEAN});
+  tgt.dirty = true; -- allways execute
   --
   return nil; -- no new toolchain to return.
 end;

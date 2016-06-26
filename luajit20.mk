@@ -20,23 +20,31 @@ local JIT_HOSTDIR  = JIT_SRC_DIR.."/host"
 local CFLAGS       = CFLAGS .." -fomit-frame-pointer"
 --if make.get_flag"M32" then CFLAGS = CFLAGS .. " -march=i686" end
 
-local lua_core = "ljamalg"
-
 if not make.path.isDir("luaJIT20") then
   svn.checkout{"luaJIT20", "https://github.com/Fuzzlix/lua5/branches/JIT20"}
 end
 --
-local MINILUA = c99.program {TEMPDIR.."/minilua", src="minilua.c", base=JIT_HOSTDIR, incdir=JIT_SRC_DIR}
-local ARCHH   = tempfile {TEMPDIR.."/buildvm_arch.h", deps = MINILUA,
-                          action = ("%s %s %s -D JIT -D FFI -D FPU -D HFABI -D VER= -D WIN -o $OUTFILE %s"):format(
-                                    MINILUA:canonical(), "luaJIT20/dynasm/dynasm.lua", 
-                                    make.get_flag"M32" and "" or "-D P64", "luaJIT20/src/vm_x86.dasc")
-                         }
+local ARCHH
+if make.LUAVERSION == "LUAJIT" then
+  local MINILUA = c99.program {TEMPDIR.."/minilua", src="minilua.c", base=JIT_HOSTDIR, incdir=JIT_SRC_DIR}
+  ARCHH   = tempfile {TEMPDIR.."/buildvm_arch.h", deps = MINILUA,
+                    action = ("%s %s %s -D JIT -D FFI -D FPU -D HFABI -D VER= -D WIN -o $OUTFILE %s"):format(
+                              MINILUA:canonical(), "luaJIT20/dynasm/dynasm.lua", 
+                              make.get_flag"M32" and "" or "-D P64", "luaJIT20/src/vm_x86.dasc")
+                   }
+else
+  local MINILUA = c99.program {TEMPDIR.."/minilua", src="minilua.c", base=JIT_HOSTDIR, incdir=JIT_SRC_DIR}
+        ARCHH   = tempfile {TEMPDIR.."/buildvm_arch.h", deps = MINILUA,
+                            action = ("%s %s %s -D JIT -D FFI -D FPU -D HFABI -D VER= -D WIN -o $OUTFILE %s"):format(
+                                      MINILUA:canonical(), "luaJIT20/dynasm/dynasm.lua", 
+                                      make.get_flag"M32" and "" or "-D P64", "luaJIT20/src/vm_x86.dasc")
+                           }
+end
 local BUILDVM = c99.program {TEMPDIR.."/buildvm", 
                              src="buildvm buildvm_asm buildvm_peobj buildvm_lib buildvm_fold", 
                              base=JIT_HOSTDIR, incdir={JIT_SRC_DIR, TEMPDIR}, deps = ARCHH,
-                             defines="LJ_ARCH_HASFPU=1 LJ_ABI_SOFTFP=0 "..
-                               (make.get_flag"M32" and "LUAJIT_TARGET=LUAJIT_ARCH_x86" or "LUAJIT_TARGET=LUAJIT_ARCH_x64")
+                             defines="LJ_ARCH_HASFPU=1 LJ_ABI_SOFTFP=0 LUAJIT_TARGET=LUAJIT_ARCH_"..
+                               (make.get_flag"M32" and "x86" or "x64")
                             }
 local LJ_VM   = tempfile {TEMPDIR.."/lj_vm.o", 
                           deps = BUILDVM,
@@ -68,7 +76,7 @@ local FOLDDEF = tempfile {TEMPDIR.."/lj_folddef.h",
                           action = ("%s -m folddef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
                          }
 local LJDEPS  = {FFDEF, BCDEF, RECDEF,LIBDEF, FOLDDEF}
-local VMDEF   = tempfile {TEMPDIR.."vmdef.lua", 
+local VMDEF   = tempfile {TEMPDIR.."/vmdef.lua", 
                           src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c \z
                                lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
                           base=JIT_SRC_DIR, deps = BUILDVM,
@@ -77,9 +85,9 @@ local VMDEF   = tempfile {TEMPDIR.."vmdef.lua",
 --
 local LUAICON = wresource {"luajit", src="icon", base=JIT_SRC_DIR, odir=TEMPDIR}                                   -- icon resources
 local LUA_C   = c99 {"luajit", src="luajit", base=JIT_SRC_DIR, odir=TEMPDIR, from="luajit:defines", cflags=CFLAGS} -- lua program c source
-local LIB_C   = c99 {"luajit_s", src=lua_core, base=JIT_SRC_DIR, odir=TEMPDIR, incdir={TEMPDIR, JIT_SRC_DIR},      -- static lib c source
+local LIB_C   = c99 {"luajit_s", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR, incdir={TEMPDIR, JIT_SRC_DIR},     -- static lib c source
                      deps=LJDEPS, from="luajits:defines", cflags=CFLAGS}
-local DLL_C   = c99 {"luajit_d", src=lua_core, base=JIT_SRC_DIR, odir=TEMPDIR, incdir={TEMPDIR, JIT_SRC_DIR},      -- dynamic lib c source
+local DLL_C   = c99 {"luajit_d", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR, incdir={TEMPDIR, JIT_SRC_DIR},     -- dynamic lib c source
                      deps=LJDEPS, from="luajit:defines", cflags=CFLAGS} 
 --
 local LUALIB  = c99.library {'lua51', odir=LUA_IDIR, inputs={LIB_C, LJ_VM}}                             -- static lua runtime lib
