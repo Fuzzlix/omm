@@ -28,7 +28,7 @@ Required 3rd party modules:
 
 _DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.2-beta-16/06/20\n  A lua based extensible build engine.";
+local VERSION = "mk 0.2-beta-16/07/07\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -2942,7 +2942,6 @@ do -- [tools] ==================================================================
           end;
         end;
         par.src = nil;
-        par.base = nil;
       end;
     end;
     -- inputs = ...
@@ -2994,7 +2993,15 @@ do -- [tools] ==================================================================
     end;
     -- incdir = ...
     if par.incdir then
-      sources.incdir:add(par.incdir);
+      if type(par.incdir) == "string" then
+        par.incdir = split(par.incdir);
+      end;
+      for _, d in ipairs(par.incdir) do
+        if par.base then 
+          d = fn_join{par.base, d}
+        end;
+        sources.incdir:add(d);
+      end;
       par.incdir = nil;
     end;
     -- deps = ...
@@ -3037,6 +3044,7 @@ do -- [tools] ==================================================================
       par.from = nil;
     end;
     --
+    par.base = nil;
     return sources;
   end; -- getSources(par)
 
