@@ -1131,6 +1131,7 @@ do
       path = path:gsub("/[^%./]+/%.%./", "/");
     end;
     path = path:gsub("/[^%./]+/%.%.$", "");
+    path = path:gsub("/%.$", "");
     return path;
   end;
   
@@ -2366,7 +2367,7 @@ do
     if (type(p1) == "string") and (p2 == nil)  then
       -- "alias = need" ?
       if p1:find("=") then
-        local alias, need = p1:match("^(%w+)%s*=%s*(%w+)$");
+        local alias, need = p1:match("^(%w+)%s*=%s*(%S+)$");
         local a, n = self:find(alias), self:find(need);
         if not n then quitMF("needs.alias(): no need '%s' defined."); end;
         if a and (a[1] == alias) then quitMF("needs.alias(): '%s' is already defined as normal need.", alias); end;
@@ -3503,8 +3504,8 @@ package.preload["tc_gnu"]          = function(...)
     PROG         = "g++",
     SW_DEPGEN    = "-MMD",
     command_obj  = "$PREFIX$PROG$SUFFIX $OPTIMIZE -c $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-    command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-    command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
+    command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+    command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
   };
   Tool:add_group();
   Tool:add_program();
