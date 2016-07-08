@@ -906,7 +906,8 @@ do -- [list classes] ===========================================================
   --
   local clList   = class.Base:subclass{
     __classname = "List";
-    __call = function(self) -- iterator
+    __call = function(self, ...) -- iterator() or find(...)
+      if select("#", ...) > 0 then return self:find(...) end;
       local i = 0;
       return function()
         i = i + 1;
