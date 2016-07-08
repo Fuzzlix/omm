@@ -3511,7 +3511,7 @@ package.preload["tc_gnu"]          = function(...)
     SRC_EXT   = ".rc",
     OBJ_EXT   = ".o",
     CMD       = "RES",
-    command   = "windres $OPTIONS $SOURCES -o $OUTFILE",
+    command   = "windres $OPTIONS $SOURCES $DEFINES -o $OUTFILE",
   };
   Tool:add_group();
   --
