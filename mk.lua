@@ -28,7 +28,7 @@ Required 3rd party modules:
 
 _DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.2-beta-16/07/07\n  A lua based extensible build engine.";
+local VERSION = "mk 0.2-beta-16/07/08\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -1090,8 +1090,8 @@ end; -- list classes
 local fn_temp,     fn_isabs,      fn_canonical,  fn_join,      fn_isFile,   
       fn_isDir,    fn_defaultExt, fn_exists,     fn_forceExt,  fn_splitext,  
       fn_get_ext,  fn_splitpath,  fn_ensurePath, fn_basename,  fn_path_lua,  
-      fn_abs,      fn_which,      fn_filetime,   fn_get_files, fn_files_from_mask,
-      fn_get_directories;
+      fn_path_cleanup, fn_abs,    fn_which,      fn_filetime,  fn_get_files, 
+      fn_files_from_mask, fn_get_directories;
 do
   --
   local gsub = string.gsub;
@@ -1125,6 +1125,15 @@ do
     end;
   end;
 
+  function fn_path_cleanup(path)
+    -- shorten path by removing ".."s.
+    while path:find("/[^%./]+/%.%./") do
+      path = path:gsub("/[^%./]+/%.%./", "/");
+    end;
+    path = path:gsub("/[^%./]+/%.%.$", "");
+    return path;
+  end;
+  
   function fn_join(...)
     local param = flatten_tbl({select(1, ...)}, select("#", ...))
     local idx = 1;
@@ -1138,7 +1147,7 @@ do
       if n:sub(-1) == "/" or n:sub(-1) == "\\" then param[i] = n:sub(1, -2); end;
     end;
     --
-    return concat(param, "/", idx)
+    return fn_path_cleanup(concat(param, "/", idx))
   end;
   
   function fn_isFile(fname, types)
@@ -1241,12 +1250,7 @@ do
       path = concat(path, "/");
     end;
     path = fn_path_lua(path); -- windows paths not used inside this script
-    -- shorten path by removing ".."s.
-    while path:find("/[^%./]+/%.%./") do
-      path = path:gsub("/[^%./]+/%.%./", "/");
-    end;
-    path = path:gsub("/[^%./]+/%.%.$", "");
-    return path;
+    return fn_path_cleanup(path);
   end;
 
   function fn_which(prog)
