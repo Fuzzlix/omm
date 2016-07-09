@@ -16,8 +16,6 @@ local LUA_IDIR   = LUA_BIN.."/include/" .. LUAVER
 local LUA_CDIR   = LUA_BIN.."/lib/" .. LUAVER
 local LUA_LDIR   = LUA_BIN.."/lua"
 
-LUAMODS_DOC_COPIED = LUAMODS_DOC_COPIED
-
 svn.checkout{"lfs", "https://github.com/keplerproject/luafilesystem/trunk"}
 if make.path.isDir("lfs") then -- module lfs
   --  [[ 
@@ -30,9 +28,9 @@ if make.path.isDir("lfs") then -- module lfs
   local MODDLL  = c99.shared  {'lfs'..LUAVER, odir=LUA_CDIR, inputs=MODD_C, needs="lua", cflags=CFLAGS}
   target("lfs", {MODLIB, MODDLL})
   default{MODLIB, MODDLL}
-  if not LUAMODS_DOC_COPIED then
+  if not make.Targets "lfs_doc" then
     local MODDOC= file {src="*.html *.png *.css", base=DOCDIR, odir=LUA_ETCDIR.."/lfs/doc"}
-    target("lfs", MODDOC)
+    target("lfs_doc", MODDOC)
     default{MODDOC}
   end;
   --
@@ -54,9 +52,9 @@ if make.path.isDir("lpeg") then -- module lpeg
   local MODLUA  = file {src="re.lua", base=MODULES, odir=LUA_CDIR}
   target("lpeg", MODLUA)
   default(MODLUA)
-  if not LUAMODS_DOC_COPIED then
+  if not make.Targets "lfs_doc" then
     local MODDOC  = file {src="*.gif *.html", base=MODULES, odir=LUA_ETCDIR.."/lpeg/doc"}
-    target("lpeg", MODDOC)
+    target("lpeg_doc", MODDOC)
     default(MODDOC)
   end;
   --]]
@@ -88,9 +86,9 @@ if make.path.isDir("luasocket") then -- module luasocket
   target("luasocket", MODBIN)
   default(MODBIN)
   --
-  if not LUAMODS_DOC_COPIED then
+  if not make.Targets "luasocket_doc" then
     local MODDOC  = file {src="doc/* etc/* samples/* test/*", base=MODULE, odir=LUA_ETCDIR.."/luasocket"}
-    target("luasocket", MODDOC)
+    target("luasocket_doc", MODDOC)
     default{MODDOC}
   end;
   --]]
@@ -153,16 +151,16 @@ if make.path.isDir("lanes") then -- module lanes
   target("lanes", MODBIN)
   default{MODBIN}
   --
-  if not LUAMODS_DOC_COPIED then
+  if not make.Targets "lanes_doc" then
     local MODDOC = file {src="docs/*", base=MODULE, odir=LUA_ETCDIR.."/lanes"}
-    target("lanes", MODDOC)
+    target("lanes_doc", MODDOC)
     default{MODDOC}
   end;
   --]]
 end; 
 
 if make.path.isDir("iuplua") then 
-  --make "iuplua"
+  make "iuplua"
 end;
 
 LUAMODS_DOC_COPIED = true
