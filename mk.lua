@@ -26,6 +26,7 @@ Required 3rd party modules:
 @script mk
 --]]--------------------------------------------------------
 
+--require "luacov"
 _DEBUG = true; -- enable some debugging output. see: dprint()
 --
 local VERSION = "mk 0.2-beta-16/07/08\n  A lua based extensible build engine.";
@@ -711,7 +712,7 @@ local Make;
 --=== [utils] ==================================================================
 local warning, warningMF, quit, quitMF, dprint, chdir, choose, pick, split, 
       split2, collect, shell, execute, roTable, pairsByKeys, subst, substitute, 
-      flatten_tbl, luaVersion, 
+      luaVersion, 
       winapi, posix,
       ENV, PWD, NUMCORES;
 do
@@ -866,20 +867,6 @@ do
     return subst(str, nil, T);
   end;
 
-  function flatten_tbl(tbl, n)
-    local result = {};
-    for i = 1, n or #tbl do
-      if type(tbl[i]) == "table" then
-        local t = flatten_tbl(tbl[i]);
-        for j = 1, #t do 
-          insert(result, t[j]); 
-        end;
-      elseif tbl[i] ~= nil then 
-        insert(result, tbl[i]); 
-      end;
-    end;
-    return result;
-  end;
   -- debug print when `_DEBUG = true`
   function dprint(msg, ...)
     if _DEBUG then print(msg:format(...)); end;
@@ -1090,7 +1077,7 @@ end; -- list classes
 local fn_temp,     fn_isabs,      fn_canonical,  fn_join,      fn_isFile,   
       fn_isDir,    fn_defaultExt, fn_exists,     fn_forceExt,  fn_splitext,  
       fn_get_ext,  fn_splitpath,  fn_ensurePath, fn_basename,  fn_path_lua,  
-      fn_path_cleanup, fn_abs,    fn_which,      fn_filetime,  fn_get_files, 
+      fn_cleanup,  fn_abs,        fn_which,      fn_filetime,  fn_get_files, 
       fn_files_from_mask, fn_get_directories;
 do
   --
@@ -1125,7 +1112,7 @@ do
     end;
   end;
 
-  function fn_path_cleanup(path)
+  function fn_cleanup(path)
     -- shorten path by removing ".."s.
     while path:find("/[^%./]+/%.%./") do
       path = path:gsub("/[^%./]+/%.%./", "/");
@@ -1136,7 +1123,12 @@ do
   end;
   
   function fn_join(...)
-    local param = flatten_tbl({select(1, ...)}, select("#", ...))
+    local param = {...}
+    local t = {}
+    for i = 1, select("#", ...) do
+      if param[i] then insert(t, param[i]) end;
+    end;
+    param = t;
     local idx = 1;
     -- start concatination with last absolute path ...
     for i, path in ipairs(param) do
@@ -1148,7 +1140,7 @@ do
       if n:sub(-1) == "/" or n:sub(-1) == "\\" then param[i] = n:sub(1, -2); end;
     end;
     --
-    return fn_path_cleanup(concat(param, "/", idx))
+    return fn_cleanup(concat(param, "/", idx))
   end;
   
   function fn_isFile(fname, types)
@@ -1251,7 +1243,7 @@ do
       path = concat(path, "/");
     end;
     path = fn_path_lua(path); -- windows paths not used inside this script
-    return fn_path_cleanup(path);
+    return fn_cleanup(path);
   end;
 
   function fn_which(prog)
@@ -2081,7 +2073,7 @@ do
   clFile = clMaketreeNode:subclass{
     __classname = "File";
     __init  = function(self, ...) -- ([<path>,]* filename)
-      self[1] = fn_abs(fn_join(fn_join(flatten_tbl({...}, select("#", ...)))));
+      self[1] = fn_abs(fn_join(...));
       return self;
     end;
   };
@@ -2092,11 +2084,12 @@ do
   end;
   
   clFile.filetime   = function(self)
-    return attributes(self[1], 'modification');
+    self._filetime = self._filetime or attributes(self[1], 'modification');
+    return self._filetime;
   end;
   
   clFile.exists     = function(self)
-    return self:filetime() ~= nil;
+    return (self._filetime or self:filetime()) ~= nil;
   end;
   
   clFile.touch      = function(self)
@@ -2418,6 +2411,9 @@ do
       end;
       for fn, v in pairs(p1) do
         if fn ~= 1 then
+          if fn == "incdir" or fn == "libdir"  then 
+            v = fn_abs(v); 
+          end;
           if self.fields:find(fn) then
             need[fn] = class.StrList:new(v);
           else
@@ -3004,7 +3000,7 @@ do -- [tools] ==================================================================
       end;
       for _, d in ipairs(par.incdir) do
         if par.base then 
-          d = fn_join{par.base, d}
+          d = fn_join(par.base, d)
         end;
         sources.incdir:add(d);
       end;
@@ -3476,8 +3472,8 @@ package.preload["tc_gnu"]          = function(...)
     PROG         = "gcc",
     SW_DEPGEN    = "-MMD",
     command_obj  = "$PREFIX$PROG$SUFFIX $OPTIMIZE -c $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-    command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-    command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
+    command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+    command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
   };
   Tool:add_group();
   Tool:add_program();
