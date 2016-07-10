@@ -162,5 +162,3 @@ end;
 if make.path.isDir("iuplua") then 
   make "iuplua"
 end;
-
-LUAMODS_DOC_COPIED = true
