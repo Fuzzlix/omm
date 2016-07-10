@@ -1781,6 +1781,54 @@ do -- [MakeScript Sandbox] =====================================================
   --
   MakeScript = clMakeScript:singleton{};
   --
+  -- Extracts all but the suffix of each file name in names. 
+  -- If the file name contains a period, the basename is everything starting up to 
+  -- (and not including) the last period. Periods in the directory part are ignored. 
+  -- If there is no period, the basename is the entire file name. For example,
+  --     `basename "src/foo.c src-1.0/bar hacks"`
+  -- produces the result `"src/foo src-1.0/bar hacks"`.
+  clMakeScript.basename = function(...)
+    if select("#", ...) ~= 1 then quitMF("basename() need 1 parameter exactly."); end;
+    local lst = select(1, ...);
+    lst = split(lst);
+    for i = 1, #lst do
+      lst[i] = lst[i]:gsub("%.[^%.]*$", "");
+    end;
+    return concat(lst, " ");
+  end;
+  --
+  -- The argument names is regarded as a series of names, separated by whitespace;
+  -- suffix is used as a unit. The value of suffix is appended to the end of each
+  -- individual name and the resulting larger names are concatenated with single
+  -- spaces between them. For example,
+  --   `addsuffix(".c", "foo bar")`
+  -- produces the result `"foo.c bar.c"`.
+  clMakeScript.addsuffix = function(...)
+    if select("#", ...) ~= 2 then quitMF("addsuffix() need 2 parameter exactly."); end;
+    local suffix, lst = select(1, ...);
+    lst = split(lst);
+    for i = 1, #lst do
+      lst[i] = lst[i]..suffix;
+    end;
+    return concat(lst, " ");
+  end;
+  --
+  -- The argument names is regarded as a series of names, separated by whitespace;
+  -- prefix is used as a unit. The value of prefix is prepended to the front of each
+  -- individual name and the resulting larger names are concatenated with single
+  -- spaces between them. For example,
+  --   `addprefix( "src/", "foo bar")`
+  -- produces the result `"src/foo src/bar"`.
+  clMakeScript.addprefix = function(...)
+    if select("#", ...) ~= 2 then quitMF("addprefix() need 2 parameter exactly."); end;
+    local prefix, lst = select(1, ...);
+    lst = split(lst);
+    for i = 1, #lst do
+      lst[i] = prefix..lst[i];
+    end;
+    return concat(lst, " ");
+  end;
+  --
 end;
 --
 local runMake; -- FORWARD()
