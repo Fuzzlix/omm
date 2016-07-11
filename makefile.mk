@@ -24,14 +24,15 @@ TEMPDIR = LUAROOT.."/tmp"      -- dir for intermediate files
           .. (M32 and "/32" or "") 
           .. (M64 and "/64" or "") 
 
-CFLAGS  = "-Werror -pipe" -- Make all warnings into errors.
+--CFLAGS  = "-Werror -pipe" -- Make all warnings into errors.
+CFLAGS  = "-pipe"
 --
 -----------------------------------------------------------------------------------------------
 --
 -- Dont use "luajit20" and "lua51" makefiles at the same time!
 -- luajit acts as a replacement for lua51.
-make "luajit20"
---make "lua51"
+--make "luajit20"
+make "lua51"
 make "modules"
 make "lua52"
 make "modules"

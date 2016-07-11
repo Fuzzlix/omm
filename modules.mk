@@ -79,7 +79,7 @@ if make.path.isDir("luasocket") then -- module luasocket
   local MIMELIB = c99.library {'mime_core'..LUAVER,   odir=LUA_IDIR, inputs=MIMES_C, needs="luas"}
   local MIMEDLL = c99.shared  {'mime/core'..LUAVER,   odir=LUA_CDIR, inputs={MIMED_C, SOCTSDLL}, needs="lua", cflags=CFLAGS}
   --
-  local MODLUA1 = file {src="socket mime",                  ext=".lua", base=SRCDIR, odir=LUA_CDIR}
+  local MODLUA1 = file {src="socket mime ltn12",            ext=".lua", base=SRCDIR, odir=LUA_CDIR}
   local MODLUA2 = file {src="ftp headers http smtp tp url", ext=".lua", base=SRCDIR, odir=LUA_CDIR.."/socket"}
   local MODLUA  = group {MODLUA1, MODLUA2}
   local MODBIN  = group {SOCTSLIB, SOCTSDLL, MIMELIB, MIMEDLL, MODLUA}
@@ -96,7 +96,7 @@ end;
 
 svn.checkout{"penlight", "https://github.com/stevedonovan/Penlight/trunk"}
 if make.path.isDir("penlight") then -- module penlight
-  if not LUAMODS_DOC_COPIED then
+  if not make.Targets "penlight" then
     -- [[ TODO: generate docs
     local MODULE  = MODULES.."/penlight"
     local SRCDIR  = MODULE.."/lua"
