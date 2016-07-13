@@ -1639,7 +1639,7 @@ do
       end;
       --
       function wait()
-        --dprint("wait", #Processes, n_threads)
+        --dprint("wait\t\t%s\t%s", #Processes, n_threads)
         local idx, err = winapi.wait_for_processes(Processes, false)
         if err then 
           return nil, err 
@@ -2109,6 +2109,7 @@ do
           self.action = deps.action;
         end;
         self.deps = deps and clTargetList:new(deps);
+        self.prerequisites = self.deps.prerequisites;
       end;
       return self;
     end;
@@ -3169,6 +3170,7 @@ do -- [tools] ==================================================================
     local sources = self:getSources(par);
     if par.odir then
       local result = clTargetList:new();
+      result.prerequisites = sources.prerequisites;
       for sf in sources() do
         local fn = fn_forceExt(fn_basename(sf[1]),self.OBJ_EXT or self.toolchain.OBJ_EXT);
         if type(par[1]) == "string" then fn = par[1] .. "_" .. fn; end;
@@ -3824,7 +3826,7 @@ package.preload["tc_lua"]          = function(...) --TODO
   function Tool:action_run(...)
     local par = self:checkParam(...);
     local sources = self:getSources(par);
-    if type(par.odir) ~= "string" then quitMF("file.copy(): 'odir' is missing."); end;
+    if type(par.odir) ~= "string" then quitMF("lua.run(): 'odir' is missing."); end;
     local targets = clTargetList:new();
     --TODO:
     return targets;
