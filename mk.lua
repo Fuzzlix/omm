@@ -1057,7 +1057,7 @@ do -- [list classes] ===========================================================
         end;
       end;
     else
-      quit("parameter needs to be a string or a list of strings.", 2);
+      quit("clStrList.add(): parameter needs to be a string or a list of strings.", 2);
     end;
     return self;
   end;
@@ -1634,7 +1634,7 @@ do
       local comspec = ENV.COMSPEC .. ' /c ';
       --
       function spawn(cmd)
-        --dprint("spawn", #Processes, n_threads)
+        --dprint("spawn\t\t%s\t%s", #Processes, n_threads)
         return winapi.spawn_process(comspec..cmd);
       end;
       --
@@ -1682,7 +1682,7 @@ do
     end;
     
     function jobs_wait(cmd, callback)
-      --dprint("jobs_wait", #Processes, n_threads)
+      --dprint("jobs_wait\t%s\t%s", #Processes, n_threads)
       if #Processes == 0 then 
         if cmd then job_start(cmd, callback); end;
         return 
@@ -1694,7 +1694,7 @@ do
       local inf, _ = io.open(item.tmp, 'r');
       Processes:remove(idx);
       Outputs:remove(idx);
-      --dprint("callback", #Processes, n_threads)
+      --dprint("callback\t%s\t%s", #Processes, n_threads)
       item.callback(code == 0, code, inf);
       if item.read then item.read:close() end;
       inf:close();
@@ -1703,7 +1703,7 @@ do
     end;
     
     function jobs_clear()
-      --dprint("jobs_clear", #Processes, n_threads)
+      --dprint("jobs_clear\t%s\t%s", #Processes, n_threads)
       while #Processes > 0 do 
         jobs_wait(); 
       end;
@@ -1713,7 +1713,7 @@ do
       if n_threads < 2 then
         execute_wrapper(cmd, callback)
       else
-        --dprint("job_execute", #Processes, n_threads)
+        --dprint("job_execute\t%s\t%s", #Processes, n_threads)
         while #Processes > n_threads do jobs_wait(); end; -- job queue is full
         if #Processes == n_threads then
           jobs_wait(cmd, callback);
@@ -2056,7 +2056,7 @@ end;
 --
 --=== [file & target handling] =================================================
 local clSourceFile, clIncludeFile, clTempFile, clTargetFile, clTargetList;
-local Sources, Includes, Intermediates, ProgsAndLibs, Targets; 
+local Sources, Includes, Intermediates, Targetfiles, Targets; 
 do 
   local clMaketreeNode, clTarget, clFile, clGeneratedFile, target, default;
   --
@@ -2073,14 +2073,21 @@ do
     end
   end;
   --
-  clMaketreeNode.needsBuild = function(self)
-    -- each subclass has to redefine this method.
+  clMaketreeNode.needsBuild = function(self, neededBy) --TODO
+    -- subclass has to redefine this method.
     error("clMaketreeNode:needsBuild(): abstract method called.");
   end;
 
   clMaketreeNode.presDirty  = function(self)
     if self.prerequisites then
-      return self.prerequisites:needsBuild();
+      if class(self.prerequisites, "StringList") then
+        local result = false;
+        for tgt in self.prerequisites() do
+          result = result or (Targets(tgt) or Targetfiles(tgt)):needsBuild();
+        end;
+      else 
+        return self.prerequisites:needsBuild();
+      end;
     end;
     return false, -1;
   end;
@@ -2107,6 +2114,15 @@ do
     end;
   };
   
+  clTarget.add_deps   = function(self, deps)
+    if self.deps == nil then
+      self.deps = clTargetList:new(deps)
+    else
+      self.deps:add(deps)
+    end
+    self.prerequisites = self.deps.prerequisites
+  end;
+  
   clTarget.needsBuild = function(self)
     local dirty, modtime = self:presDirty();
     if self.deps then
@@ -2126,8 +2142,8 @@ do
     end;
   };
   
-  clFile.needsBuild = function(self)           
-    -- each subclass has to redefine this method.
+  clFile.needsBuild = function(self, neededBy) --TODO
+    -- subclass has to redefine this method.
     error("clFile:needsBuild(): abstract method called.");
   end;
   
@@ -2174,7 +2190,7 @@ do
     end;
   };
   
-  clSourceFile.needsBuild = function(self)
+  clSourceFile.needsBuild = function(self, neededBy) --TODO
     if self._scanned then return self.dirty, self._mtime; end;
     if not self:exists() then
       quit("make(): sourcefile '%s' does not exist.", self[1], 0); 
@@ -2205,7 +2221,7 @@ do
     end;
   };
   
-  clIncludeFile.needsBuild = function(self)
+  clIncludeFile.needsBuild = function(self, neededBy) --TODO
     if not self:exists() then
       quit("make(): included file '%s' does not exist.", self[1], 0); 
     end;
@@ -2216,7 +2232,7 @@ do
     __classname  = "GeneratedFile",
   };
   
-  clGeneratedFile.needsBuild = function(self)
+  clGeneratedFile.needsBuild = function(self, neededBy) --TODO
     if self._scanned then return self.dirty, self._mtime; end;
     local dirty, modtime = self:presDirty();
     local time = self:filetime() or -1;
@@ -2249,7 +2265,7 @@ do
     end,
   };
   
-  clTempFile.needsBuild = function(self)
+  clTempFile.needsBuild = function(self, neededBy) --TODO
     if self._scanned then return self.dirty, self._mtime; end;
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
       quit("make(): file '%s' does not exist.", self[1], 0); 
@@ -2283,7 +2299,7 @@ do
     __classname  = "TargetFile",
     __init  = function(self, ...) -- ([<path>,]* filename)
       clTargetFile.super.__init(self, ...);
-      ProgsAndLibs:add(self);
+      Targetfiles:add(self);
       return self;
     end,
   };
@@ -2293,14 +2309,46 @@ do
     __allowed   = "FilesAndTargets",
     __init      = function(self, param, ...)
       self.__dir = {};
+      self.prerequisites = class.StrList:new();
       if type(param) == "table" then
         self:add(param);
+        local pres = self.prerequisites;
+        if class(param) then
+          if param.prerequisites then pres:add(param.prerequisites); end;
+        else
+          for _, node in ipairs(param) do
+            if node.prerequisites then pres:add(node.prerequisites); end;
+          end;
+        end;
       end;
       return self;
     end,
   };
   
-  clTargetList.needsBuild      = function(self)
+  clTargetList.add             = function(self, item)
+  local kf = self.__key or 1;
+  if class(item, self.__allowed) then 
+    if not self.__dir[item[kf]] then
+      insert(self, item);
+      self.__dir[item[kf]] = item;
+      if class(item.prerequisites, "StringList") then
+        self.prerequisites:add(item.prerequisites);
+      end;
+    else
+      error(("cant overwrite value '%s'"):format(item[kf]));
+      --return nil, self.__dir[item[kf]];
+    end;
+  elseif type(item) == "table" then  
+    for _, v in ipairs(item) do 
+      self:add(v); 
+    end;
+  else
+    error("parameter needs to be a object or a list of objects.", 2);
+  end;
+  return self;
+end;
+
+  clTargetList.needsBuild      = function(self, neededBy) --TODO
     local time, dirty, modtime = -1, false, -1;
     for n in self() do
       dirty, modtime = n:needsBuild();
@@ -2356,7 +2404,7 @@ do
   -- 
   Sources       = clTargetList:new(); -- all sources.
   Includes      = clTargetList:new(); -- all headers/sources included by source files.
-  ProgsAndLibs  = clTargetList:new(); -- all programs, static and dynamic libs to build.
+  Targetfiles   = clTargetList:new(); -- all programs, static and dynamic libs to build.
   Intermediates = clTargetList:new(); -- all intermediate files.
   Targets       = clTargetList:new(); -- all phony targets.
   --
@@ -2379,11 +2427,11 @@ do
   clMakeScript.default = default;
   clMakeScript.target  = target;
   --
-  clMake.Sources      = Sources;
-  clMake.Includes     = Includes;
-  clMake.Tempfiles    = Intermediates;
-  clMake.ProgsAndLibs = ProgsAndLibs;
-  clMake.Targets      = Targets;
+  clMake.Sources     = Sources;
+  clMake.Includes    = Includes;
+  clMake.Tempfiles   = Intermediates;
+  clMake.Targetfiles = Targetfiles;
+  clMake.Targets     = Targets;
   --
 end;
 --
@@ -2571,7 +2619,7 @@ do -- [make pass 2 + 3] ========================================================
     local function getTarget()
       if targets == nil then
         if not Make.Targets:find("default") then
-          MakeScript.default(ProgsAndLibs);
+          MakeScript.default(Targetfiles);
         end;
         if Make.target then
           targets = split(Make.target, ",");
@@ -2956,15 +3004,15 @@ do -- [tools] ==================================================================
   --
   function clTool:getSources(par)
     local sources = clTargetList:new{__allowed = "SourceFile"};
-    sources.prerequisites = clTargetList:new();
-    sources.cflags  = class.StrList:new();
-    sources.defines = class.StrList:new();
-    sources.incdir  = class.StrList:new();
-    sources.libdir  = class.StrList:new();
-    sources.libs    = class.StrList:new();
-    sources.from    = class.StrList:new();
-    sources.base    = fn_abs(par.base or ".");
-    sources.tool    = self;
+    sources.prerequisites = class.StrList:new();
+    sources.cflags        = class.StrList:new();
+    sources.defines       = class.StrList:new();
+    sources.incdir        = class.StrList:new();
+    sources.libdir        = class.StrList:new();
+    sources.libs          = class.StrList:new();
+    sources.from          = class.StrList:new();
+    sources.base          = fn_abs(par.base or ".");
+    sources.tool          = self;
     -- src = ...
     if par.src     then
       if type(par.src) == "string" then
@@ -3023,7 +3071,7 @@ do -- [tools] ==================================================================
               for pre in n[f]() do
                 local tgt = Targets:find(pre);
                 if tgt then 
-                  sources.prerequisites:add(tgt); 
+                  sources.prerequisites:add(tgt[1]); 
                 else 
                   quitMF("no target '%s' defined.", pre); 
                 end;
@@ -3081,7 +3129,7 @@ do -- [tools] ==================================================================
         for _, ts in ipairs(par.prerequisites) do
           local t = Targets:find(ts);
           if not t then quitMF("no target '%s' defined.", ts); end;
-          sources.prerequisites:add(t.deps);
+          sources.prerequisites:add(t[1]); --get real need name in case of alias.
         end;
       else
         quitMF("make(): parameter 'prerequisites' needs to be a string or a list of strings."); 
@@ -3136,14 +3184,8 @@ do -- [tools] ==================================================================
         of.libs          = sources.libs;
         of.needs         = sources.needs;
         of.from          = sources.from;
-        of.prerequisites = sources.prerequisites;
         if not Make.get_flag("NODEPS") then
-          local p = self:readDepFile(of)
-          if p then 
-            for f in p() do
-              if not of.prerequisites:find(f[1]) then of.prerequisites:add(f); end;
-            end;
-          end;
+          of.prerequisites = self:readDepFile(of)
         end;
       end;
       if par[1] ~= nil then remove(par, 1); end;
@@ -3886,7 +3928,7 @@ package.preload["tc_targets"]      = function(...)
 
   local function action_CLEAN(self)
     Make.Tempfiles:delete();
-    Make.ProgsAndLibs:delete();
+    Make.Targetfiles:delete();
   end;
   --
   local tgt;
