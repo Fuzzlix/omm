@@ -2058,8 +2058,7 @@ end;
 local clSourceFile, clIncludeFile, clTempFile, clTargetFile, clTargetList;
 local Sources, Includes, Intermediates, Targetfiles, Targets; 
 do 
-  local clMaketreeNode, clTarget, clFile, clGeneratedFile, target, default,
-        Prerequested;
+  local clMaketreeNode, clTarget, clFile, clGeneratedFile, target, default;
   --
   -- generic make tree node.
   clMaketreeNode = class.Base:subclass{
@@ -2073,7 +2072,7 @@ do
       self.deps:add(deps)
     end
   end;
-  clMaketreeNode.needsBuild       = function(self, always_make)
+  clMaketreeNode.needsBuild       = function(self)
     -- subclass has to redefine this method.
     error("clMaketreeNode:needsBuild(): abstract method called.");
   end;
@@ -2083,9 +2082,6 @@ do
     if self.prerequisites then
       local res, mt;
       for node in self.prerequisites() do
-        if not (node:is("IncludeFile") or Prerequested:find(node[1])) then
-          Prerequested:add(node);
-        end;
         res, mt = node:needsBuild();
         if res then
           result = res;
@@ -2102,95 +2098,53 @@ do
     end;
     return false, -1; 
   end;
-  clMaketreeNode.getBuildSequence = function(self) --TODO
-    --TODO
-    local targets     = clTargetList:new();
-    local maxTgtLevel = 0;
-    local tgtLvlTbl   = {};
-    --
+  clMaketreeNode.getBuildSequence = function(self)
     local targetfiles = clTargetList:new();
     local maxLevel    = 0;
     local lvlTbl      = {};
     local Needs = Make.Needs;
     --
-    local function deduceLevels(target, lvl)
-      local function deduceLvl(node, lvl)
-        local function remember(node)
-          --dprint("%s\t%s",node.level, node[1]);
-          if not targetfiles:find(node[1]) then targetfiles:add(node); end;
-        end;
-        lvl = lvl or 1;
-        if not node:is("TargetList Target") or node.action then
-          lvl = lvl + 1;
-        end;
-        if node == nil or node:is("SourceFile") then return; end;
-        maxLevel = max(maxLevel, lvl);
-        node.level = max(node.level or -1, lvl);
-        -- expanding from's
-        if node.from then
-          for fs in node.from() do
-            local ft = Needs(fs);
-            for n, v in pairs(ft) do
-              node[n]:add(v);
-            end;
-          end;
-          node.from = nil;
-        end;
-        if node.prerequisites and #node.prerequisites > 0 then 
-          deduceLvl(node.prerequisites, lvl);
-        end;
-        if node.action then remember(node); end;
-        if node:is("TargetList") then
-          for t in node() do deduceLvl(t, lvl); end;
-        elseif node:is("Target") then
-          --if not (always_make or node.dirty) then return; end;
-          --if targets:find(node[1]) then return; end;
-          deduceLvl(node.deps, lvl);
-        elseif node:is("GeneratedFile") then
-          if not (always_make or node.dirty) then return; end;
-          --dprint("%s\t%s", lvl, node[1])
-          remember(node);
-          deduceLvl(node.deps, lvl);
-        end;
+    local function deduceLvl(node, lvl)
+      local function remember(node)
+        --dprint("%s\t%s",node.level, node[1]);
+        if not targetfiles:find(node[1]) then targetfiles:add(node); end;
       end;
-      
-      local function deduceTgtLvl(target, lvl)
-        local function rememberTarget(target)
-          --dprint("%s\t%s",target.level, target[1]);
-          if not targets:find(target[1]) then targets:add(target); end;
-          maxTgtLevel = max(maxTgtLevel, target.level);
-        end;
-        if target == nil then return; end;
-        lvl = lvl or 1;
-        target.level = max(target.level or -1, lvl);
-        rememberTarget(target)
-        if target.prerequisites then
-          for tgt in target.prerequisites() do
-            deduceTgtLvl(Targets:find(tgt), lvl + 1);
+      lvl = lvl or 1;
+      if not node:is("TargetList Target") or node.action then
+        lvl = lvl + 1;
+      end;
+      if node == nil or node:is("SourceFile") then return; end;
+      maxLevel = max(maxLevel, lvl);
+      node.level = max(node.level or -1, lvl);
+      -- expanding from's
+      if node.from then
+        for fs in node.from() do
+          local ft = Needs(fs);
+          for n, v in pairs(ft) do
+            node[n]:add(v);
           end;
         end;
+        node.from = nil;
       end;
-      --
-      deduceTgtLvl(self) -- order targets
-      for tgt in targets() do
-        tgtLvlTbl[tgt.level] = tgtLvlTbl[tgt.level] or {};
-        insert(tgtLvlTbl[tgt.level], tgt);
+      if node.prerequisites and #node.prerequisites > 0 then 
+        deduceLvl(node.prerequisites, lvl);
       end;
-      dprint(("makeNodeQD(): %s targets in %s level(s)."):format(#targets, #tgtLvlTbl));
-      --for i, t in ipairs(tgtLvlTbl) do dprint("========== level "..i); for _, n in ipairs(t) do dprint(n[1]); end; end;
-      for _, tgtLvl in ipairs(tgtLvlTbl) do
-        local l = maxLevel;
-        for _, tgt in ipairs(tgtLvl) do
-          deduceLvl(tgt, l + 1);
-        end;
+      if node.action then remember(node); end;
+      if node:is("TargetList") then
+        for t in node() do deduceLvl(t, lvl); end;
+      elseif node:is("Target") then
+        --if not (always_make or node.dirty) then return; end;
+        --if targets:find(node[1]) then return; end;
+        deduceLvl(node.deps, lvl);
+      elseif node:is("GeneratedFile") then
+        if not node.dirty then return; end;
+        --dprint("%s\t%s", lvl, node[1])
+        remember(node);
+        deduceLvl(node.deps, lvl);
       end;
-      
     end;
-    
-    
-    
     --
-    deduceLevels(self);
+    deduceLvl(self);
     -- filling the level table. (higher levels become executed 1st.)
     for i = 1, maxLevel do lvlTbl[i] = {}; end;
     for n in targetfiles() do insert(lvlTbl[n.level], n); end;
@@ -2198,6 +2152,7 @@ do
     for i = #lvlTbl, 1, -1 do
       if #lvlTbl[i] == 0 then remove(lvlTbl, i); end;
     end;
+    -- [[ debug messages
     if _DEBUG then -- print out some node status.
       local _min, _max = 1/0, -1/0;
       for _, t in ipairs(lvlTbl) do
@@ -2207,6 +2162,7 @@ do
       dprint(("makeNodeQD(): %s nodes in %s level(s). %s..%s nodes/level"):format(#targetfiles, #lvlTbl, _min, _max));
       -- print filenames ...
       --for i, t in ipairs(lvltbl) do dprint("========== level "..i); for _, n in ipairs(t) do dprint(n[1]); end; end;
+      --]]
     end;
     return lvlTbl;
   end;
@@ -2255,7 +2211,7 @@ do
     end;
   };
   
-  clFile.needsBuild = function(self, always_make)
+  clFile.needsBuild = function(self)
     -- subclass has to redefine this method.
     error("clFile:needsBuild(): abstract method called.");
   end;
@@ -2509,9 +2465,6 @@ end;
   Targetfiles   = clTargetList:new(); -- all programs, static and dynamic libs to build.
   Intermediates = clTargetList:new(); -- all intermediate files.
   Targets       = clTargetList:new(); -- all phony targets.
-  Prerequested  = clTargetList:new{   -- all prerequested targetfiles.
-    __allowed="GeneratedFile",
-  };
   --
   function target(label, deps, ...)
     if select('#', ...) > 0 or deps == nil then quitMF("target(): parameter error. Did you use {}?"); end;
@@ -2749,7 +2702,7 @@ do -- [make pass 2 + 3] ========================================================
       end;
       return target;
     end;
-    -- returns the dirty status of a given node.
+    -- pass 2
     local function needsBuild(treeNode)
       local res = treeNode:needsBuild(always_make);
       if not res then 
