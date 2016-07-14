@@ -2996,10 +2996,8 @@ do -- [tools] ==================================================================
   end;
   --
   function clTool:getSources(par)
-    local sources = clTargetList:new{__allowed = "SourceFile"};
-    sources.prerequisites = clTargetList:new{
-      ___allowed="generatedFile"
-    };
+    local sources = clTargetList:new();
+    sources.prerequisites = clTargetList:new();
     sources.cflags        = class.StrList:new();
     sources.defines       = class.StrList:new();
     sources.incdir        = class.StrList:new();
@@ -3010,9 +3008,7 @@ do -- [tools] ==================================================================
     sources.tool          = self;
     -- src = ...
     if par.src     then
-      if type(par.src) == "string" then
-        par.src = split(par.src);
-      end;
+      if type(par.src) == "string" then par.src = split(par.src); end;
       if type(par.src) == "table" then
         local exts = split(pick(par.ext, self.SRC_EXT));
         for _, n in ipairs(par.src) do
@@ -3039,8 +3035,18 @@ do -- [tools] ==================================================================
     end;
     -- inputs = ...
     if par.inputs  then
-      sources:add(par.inputs);
-      -- TODO: copy fields too?
+      if class(par.inputs) then par.inputs = {par.inputs}; end;
+      for _, node in ipairs(par.inputs) do
+        sources:add(node);
+        if node.prerequisites then
+          for pre in node.prerequisites() do
+            if not sources.prerequisites:find(pre[1]) then
+              sources.prerequisites:add(pre);
+            end;
+          end;
+        end;
+        -- TODO: copy more fields?
+      end;
       par.inputs = nil;
     end;
     -- libs = ...
@@ -3066,7 +3072,11 @@ do -- [tools] ==================================================================
               for pre in n[f]() do
                 local tgt = Targets:find(pre);
                 if tgt then 
-                  sources.prerequisites:add(tgt.deps); 
+                  for node in tgt.deps() do
+                    if not sources.prerequisites:find(node[1]) then
+                      sources.prerequisites:add(node);
+                    end;
+                  end;
                 else 
                   quitMF("no target '%s' defined.", pre); 
                 end;
@@ -3098,11 +3108,10 @@ do -- [tools] ==================================================================
       par.incdir = nil;
     end;
     -- deps = ...
-    if par.deps then 
-      if class(par.deps, "FilesAndTargets") then
-        par.deps = {par.deps};
-      end;
-      if type(par.deps) == "table" then
+    if par.deps then --TODO
+      if class(par.deps, "GeneratedFile") then
+        sources.prerequisites:add(par.deps)
+      elseif type(par.deps) == "table" then
         for _, ts in ipairs(par.deps) do
           if class(ts, "FilesAndTargets") then
             sources.prerequisites:add(ts);
@@ -3671,7 +3680,9 @@ package.preload["tc_files"]        = function(...)
     if type(par.odir) ~= "string" then quitMF("file.copy(): 'odir' is missing."); end;
     local targets = clTargetList:new();
     for sf in sources() do
-      local target = targets:new_targetfile(par.odir, sf[1]:sub(#sources.base+2));
+      local dfn = sf[1];
+      dfn = (dfn:find(sources.base) == 1) and dfn:gsub(sources.base.."/","") or dfn:match("([^/]*)$");
+      local target = targets:new_targetfile(par.odir, dfn);
       target.deps = sf;
       target.tool = self;
       target.type = "copy";
