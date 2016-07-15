@@ -31,8 +31,8 @@ CFLAGS  = "-pipe"
 --
 -- Dont use "luajit20" and "lua51" makefiles at the same time!
 -- luajit acts as a replacement for lua51.
---make "luajit20"
-make "lua51"
+make "luajit20"
+--make "lua51"
 make "modules"
 make "lua52"
 make "modules"
