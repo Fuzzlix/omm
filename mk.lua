@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 _DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.2-beta-16/07/14\n  A lua based extensible build engine.";
+local VERSION = "mk 0.3-beta-16/07/15\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
