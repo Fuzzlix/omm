@@ -41,7 +41,7 @@ local LUAINC  = file {src="lua.h luaconf.h lualib.h lauxlib.h", base=LUA_SRC_DIR
 local LUADOC  = file {src="*", base=LUA_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/lua51/doc"}
 local LUAETC  = file {src="*.ico", base=LUA_SRC_DIR.."/../etc", odir=LUA_IDIR}
 --
-local LUA = group {LUAEXE, LUAC, LUAINC, LUADOC, LUAETC}
+local LUA = group {LUAEXE, LUAC, LUALIB, LUAINC, LUADLL, LUADOC, LUAETC}
 
 target("lua51", LUA)
 

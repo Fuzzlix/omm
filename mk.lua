@@ -27,9 +27,9 @@ Required 3rd party modules:
 --]]--------------------------------------------------------
 
 --require "luacov"
-_DEBUG = true; -- enable some debugging output. see: dprint()
+--_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.3-beta-16/07/15\n  A lua based extensible build engine.";
+local VERSION = "mk 0.3.1-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -2055,10 +2055,10 @@ end;
 
 --
 --=== [file & target handling] =================================================
-local clSourceFile, clIncludeFile, clTempFile, clTargetFile, clTargetList;
-local Sources, Includes, Intermediates, Targetfiles, Targets; 
+local clSourceFile, clIncludeFile, clGeneratedFile, clTargetList;
+local Sources, Includes, Intermediates, Targets; 
 do 
-  local clMaketreeNode, clTarget, clFile, clGeneratedFile, target, default;
+  local clMaketreeNode, clTarget, clFile, target, default;
   --
   -- generic make tree node.
   clMaketreeNode = class.Base:subclass{
@@ -2067,22 +2067,21 @@ do
   
   clMaketreeNode.add_deps         = function(self, deps)
     if self.deps == nil then
-      self.deps = clTargetList:new(deps)
-    else
-      self.deps:add(deps)
-    end
+      self.deps = clTargetList:new();
+    end;
+    self.deps:add(deps)
   end;
   clMaketreeNode.needsBuild       = function(self)
     -- subclass has to redefine this method.
     error("clMaketreeNode:needsBuild(): abstract method called.");
   end;
 
-  clMaketreeNode.presDirty        = function(self)
+  clMaketreeNode.presDirty        = function(self, always_make)
     local result, mtime = false, -1;
     if self.prerequisites then
       local res, mt;
       for node in self.prerequisites() do
-        res, mt = node:needsBuild();
+        res, mt = node:needsBuild(always_make);
         if res then
           result = res;
           mtime = max(mtime, mt);
@@ -2098,8 +2097,10 @@ do
     end;
     return false, -1; 
   end;
+  --
   clMaketreeNode.getBuildSequence = function(self)
-    local targetfiles = clTargetList:new();
+    local FileList = clTargetList:new();
+    local PresList = clTargetList:new();
     local maxLevel    = 0;
     local lvlTbl      = {};
     local Needs = Make.Needs;
@@ -2107,7 +2108,7 @@ do
     local function deduceLvl(node, lvl)
       local function remember(node)
         --dprint("%s\t%s",node.level, node[1]);
-        if not targetfiles:find(node[1]) then targetfiles:add(node); end;
+        if not FileList:find(node[1]) then FileList:add(node); end;
       end;
       lvl = lvl or 1;
       if not node:is("TargetList Target") or node.action then
@@ -2126,15 +2127,22 @@ do
         end;
         node.from = nil;
       end;
-      if node.prerequisites and #node.prerequisites > 0 then 
-        deduceLvl(node.prerequisites, lvl);
+      if node.prerequisites then 
+        for pre in node.prerequisites() do
+          if PresList:find(pre[1]) then 
+            if lvl >= pre.level then
+              deduceLvl(pre, lvl);
+            end;
+          else
+            PresList:add(pre); 
+            deduceLvl(pre, lvl);
+          end;
+        end;
       end;
       if node.action then remember(node); end;
       if node:is("TargetList") then
         for t in node() do deduceLvl(t, lvl); end;
       elseif node:is("Target") then
-        --if not (always_make or node.dirty) then return; end;
-        --if targets:find(node[1]) then return; end;
         deduceLvl(node.deps, lvl);
       elseif node:is("GeneratedFile") then
         if not node.dirty then return; end;
@@ -2147,23 +2155,23 @@ do
     deduceLvl(self);
     -- filling the level table. (higher levels become executed 1st.)
     for i = 1, maxLevel do lvlTbl[i] = {}; end;
-    for n in targetfiles() do insert(lvlTbl[n.level], n); end;
+    for n in FileList() do insert(lvlTbl[n.level], n); end;
     -- removing empty levels
     for i = #lvlTbl, 1, -1 do
       if #lvlTbl[i] == 0 then remove(lvlTbl, i); end;
     end;
-    -- [[ debug messages
+    --[[ debug messages
     if _DEBUG then -- print out some node status.
       local _min, _max = 1/0, -1/0;
       for _, t in ipairs(lvlTbl) do
         _min = math.min(_min, #t);
         _max = math.max(_max, #t);
       end;
-      dprint(("makeNodeQD(): %s nodes in %s level(s). %s..%s nodes/level"):format(#targetfiles, #lvlTbl, _min, _max));
+      dprint(("makeNodeQD(): %s nodes in %s level(s). %s..%s nodes/level"):format(#FileList, #lvlTbl, _min, _max));
       -- print filenames ...
-      --for i, t in ipairs(lvltbl) do dprint("========== level "..i); for _, n in ipairs(t) do dprint(n[1]); end; end;
-      --]]
+      for i, t in ipairs(lvlTbl) do dprint("========== level "..i); for _, n in ipairs(t) do dprint(n[1]); end; end;
     end;
+    --]]
     return lvlTbl;
   end;
   --
@@ -2185,11 +2193,25 @@ do
   
   clTarget.add_deps   = function(self, deps)
     if self.deps == nil then
-      self.deps = clTargetList:new(deps)
+      self.deps = clTargetList:new();
+    end;
+    
+    if class(deps, self.deps.__allowed) then 
+      if not self.deps:find(deps[1]) then
+        self.deps:add(deps);
+        deps.target = self;
+      else
+        quitMF(("cant overwrite value '%s'"):format(deps[1]));
+      end;
+    elseif type(deps) == "table" then  
+      for _, v in ipairs(deps) do 
+        self.deps:add(v);
+        v.target = self;
+      end;
     else
-      self.deps:add(deps)
-    end
-    self.prerequisites = self.deps.prerequisites
+      quitMF("parameter needs to be a object or a list of objects.");
+    end;
+
   end;
   
   clTarget.needsBuild = function(self, always_make)
@@ -2198,7 +2220,7 @@ do
       dirty, modtime = self.deps:needsBuild(always_make);
     end;
     self.dirty = self.dirty or dirty;
-    --dprint(("clTarget.needsBuild():        %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
+    --dprint(("clTarget.needsBuild():             %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, modtime;
   end;
   --
@@ -2262,12 +2284,12 @@ do
   clSourceFile.needsBuild = function(self, always_make)
     if self._scanned then return self.dirty, self._mtime; end;
     if not self:exists() then quit("make(): sourcefile '%s' does not exist.", self[1], 0); end;
-    local dirty, modtime, filetime = false, -1, self:filetime();
+    local dirty, modtime, time = false, -1, self:filetime();
     if self.deps then dirty, modtime = self.deps:needsBuild(always_make); end;
-    self.dirty = self.dirty or dirty or filetime < modtime or always_make;
-    --dprint(("clSourceFile.needsBuild():    %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
+    self.dirty = self.dirty or dirty or always_make;
+    --dprint(("clSourceFile.needsBuild():         %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     self._scanned = true;
-    self._mtime = max(filetime, modtime)
+    self._mtime = max(time, modtime)
     return self.dirty, self._mtime;
   end;
   --
@@ -2297,79 +2319,47 @@ do
   --
   clGeneratedFile = clFile:subclass{
     __classname  = "GeneratedFile",
-  };
-  
-  clGeneratedFile.needsBuild = function(self, always_make)
-    if self._scanned then return self.dirty, self._mtime; end;
-    local dirty, modtime = self:presDirty();
-    local time = self:filetime() or -1;
-    self.dirty = dirty or time == -1 or (time < modtime);
-    if self.deps then
-      dirty, modtime = self.deps:needsBuild(always_make);
-      self.dirty = dirty or time == -1 or (time < modtime) or always_make;
-    end;
-    --dprint(("clGeneratedFile.needsBuild(): %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
-    self._scanned = true;
-    self._mtime = max(time, modtime)
-    return self.dirty or (not self:is("TempFile") and self.dirty), self._mtime;
-  end;
-  
-  clGeneratedFile.delete     = function(self)
-    if self:exists() then 
-      if not Make.options.quiet then
-        print("DELETE " .. fn_canonical(self[1]))
-      end;
-      os.remove(self[1]);
-    end;
-  end;
-  --
-  clTempFile = clGeneratedFile:subclass{
-    __classname  = "TempFile",
     __init  = function(self, ...) -- ([<path>,]* filename)
-      clTempFile.super.__init(self, ...);
+      clGeneratedFile.super.__init(self, ...);
       Intermediates:add(self);
       return self;
     end,
   };
   
-  clTempFile.needsBuild = function(self, always_make)
+  clGeneratedFile.needsBuild = function(self, always_make)
     if self._scanned then return self.dirty, self._mtime; end;
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
       quit("make(): file '%s' does not exist.", self[1], 0); 
     end;
-    local dirty, modtime = self:presDirty();
+    local dirty, modtime = self:presDirty(always_make);
     local time = self:filetime() or -1;
-    self.dirty = self.dirty or dirty or time < modtime;
+    self.dirty = self.dirty or dirty or time < modtime or always_make;
     time = max(time, modtime);
     if self.deps then
       dirty, modtime = self.deps:needsBuild(always_make);
-      self.dirty = self.dirty or dirty or (time < modtime) or always_make;
+      self.dirty = self.dirty or dirty or (time < modtime);
     end;
-    --dprint(("clTempFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
+    dprint(("clGeneratedFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     self._scanned = true;
     self._mtime = max(time, modtime)
-    return false, self._mtime;
+    return self.dirty, self._mtime;
   end;
   
-  clTempFile.delete     = function(self)
+  clGeneratedFile.delete     = function(self)
     local depfile = fn_forceExt(self[1], ".d");
-    if self:exists() then clTempFile.super.delete(self); end;
-    if fn_exists(depfile) then
+    if self:exists() then 
       if not Make.options.quiet then
-        print("DELETE " .. fn_canonical(depfile))
+        print("DELETE " .. fn_canonical(self[1]))
       end;
-      os.remove(depfile);
+      os.remove(self[1]);
+      if fn_exists(depfile) then
+       if not Make.options.quiet then
+         print("DELETE " .. fn_canonical(depfile))
+       end;
+       os.remove(depfile);
+     end;
     end;
   end;
-  --
-  clTargetFile = clGeneratedFile:subclass{
-    __classname  = "TargetFile",
-    __init  = function(self, ...) -- ([<path>,]* filename)
-      clTargetFile.super.__init(self, ...);
-      Targetfiles:add(self);
-      return self;
-    end,
-  };
   --
   clTargetList = class.UList:subclass{
     __classname = "TargetList",
@@ -2383,40 +2373,41 @@ do
     end,
   };
   
-  clTargetList.add             = function(self, item)
-  local kf = self.__key or 1;
-  if class(item, self.__allowed) then 
-    if not self.__dir[item[kf]] then
-      insert(self, item);
-      self.__dir[item[kf]] = item;
-      if class(item.prerequisites, "StringList") then
-        self.prerequisites:add(item.prerequisites);
+  clTargetList.add               = function(self, item)
+    local kf = self.__key or 1;
+    if class(item, self.__allowed) then 
+      if not self.__dir[item[kf]] then
+        insert(self, item);
+        self.__dir[item[kf]] = item;
+        if class(item.prerequisites, "StringList") then
+          self.prerequisites:add(item.prerequisites);
+        end;
+      else
+        error(("cant overwrite value '%s'"):format(item[kf]));
+        --return nil, self.__dir[item[kf]];
+      end;
+    elseif type(item) == "table" then  
+      for _, v in ipairs(item) do 
+        self:add(v); 
       end;
     else
-      error(("cant overwrite value '%s'"):format(item[kf]));
-      --return nil, self.__dir[item[kf]];
+      error("parameter needs to be a object or a list of objects.", 2);
     end;
-  elseif type(item) == "table" then  
-    for _, v in ipairs(item) do 
-      self:add(v); 
-    end;
-  else
-    error("parameter needs to be a object or a list of objects.", 2);
+    return self;
   end;
-  return self;
-end;
 
-  clTargetList.needsBuild      = function(self, always_make)
+  clTargetList.needsBuild        = function(self, always_make)
     local time, dirty, modtime = -1, false, -1;
     for n in self() do
       dirty, modtime = n:needsBuild(always_make);
       self.dirty = self.dirty or dirty;
       time = max(time, modtime);
     end;
+    --dprint(("clTargetList.needsBuild():         %s"):format(self.dirty and "DIRTY" or "clean"));
     return self.dirty or always_make, time;
   end;
   
-  clTargetList.new_sourcefile  = function(self, ...) 
+  clTargetList.new_sourcefile    = function(self, ...) 
     local item = clSourceFile:new(...);
     if item then 
       self:add(item); 
@@ -2424,7 +2415,7 @@ end;
     return item;
   end;
   
-  clTargetList.new_includefile = function(self, ...) 
+  clTargetList.new_includefile   = function(self, ...) 
     local item = clIncludeFile:new(...);
     if item then 
       self:add(item); 
@@ -2432,29 +2423,21 @@ end;
     return item;
   end;
   
-  clTargetList.new_tempfile    = function(self, ...)
-    local item = clTempFile:new(...);
+  clTargetList.new_generatedfile = function(self, ...) 
+    local item = clGeneratedFile:new(...);
     if item then 
       self:add(item); 
     end;
     return item;
   end;
   
-  clTargetList.new_targetfile  = function(self, ...) 
-    local item = clTargetFile:new(...);
-    if item then 
-      self:add(item); 
-    end;
-    return item;
-  end;
-  
-  clTargetList.new_target      = function(self, ...)
+  clTargetList.new_target        = function(self, ...)
     local item = clTarget:new(...);
     self:add(item);
     return item;
   end;
   
-  clTargetList.delete          = function(self, ...)
+  clTargetList.delete            = function(self, ...)
     for f in self() do 
       if f:is("GeneratedFile") then f:delete(); end;
     end;
@@ -2462,18 +2445,13 @@ end;
   -- 
   Sources       = clTargetList:new(); -- all sources.
   Includes      = clTargetList:new(); -- all headers/sources included by source files.
-  Targetfiles   = clTargetList:new(); -- all programs, static and dynamic libs to build.
   Intermediates = clTargetList:new(); -- all intermediate files.
   Targets       = clTargetList:new(); -- all phony targets.
   --
   function target(label, deps, ...)
     if select('#', ...) > 0 or deps == nil then quitMF("target(): parameter error. Did you use {}?"); end;
-    local Target = Targets:find(label);
-    if Target then
-      Target:add_deps(deps);
-    else
-      Target = Targets:new_target(label, deps);
-    end;
+    local Target = Targets:find(label) or Targets:new_target(label);
+    Target:add_deps(deps);
     return Target;
   end;
   
@@ -2488,7 +2466,6 @@ end;
   clMake.Sources     = Sources;
   clMake.Includes    = Includes;
   clMake.Tempfiles   = Intermediates;
-  clMake.Targetfiles = Targetfiles;
   clMake.Targets     = Targets;
   --
 end;
@@ -2677,7 +2654,11 @@ do -- [make pass 2 + 3] ========================================================
     local function getTarget()
       if targets == nil then
         if not Make.Targets:find("default") then
-          MakeScript.default(Targetfiles);
+          for node in Make.Tempfiles() do
+            if node.type == "prog" or node.type == "slib" or node.type == "dlib" then 
+              MakeScript.default(node); 
+            end;
+          end;
         end;
         if Make.target then
           targets = split(Make.target, ",");
@@ -2718,7 +2699,7 @@ do -- [make pass 2 + 3] ========================================================
         if not node.dirty and not always_make then node.done = true; end;
         if node.done then return; end;
         if node:is("FilesAndTargets") then 
-          if always_make or node.dirty then
+          if node.dirty then
             -- construct command line
             if node:is("GeneratedFile") and not node.command then
               node.command = node.tool:build_command(node);
@@ -2891,7 +2872,7 @@ do -- [tools] ==================================================================
     end;
     -- depfile generation
     local depcmd = self.SW_DEPGEN;
-    if depcmd and not Make.get_flag("NODEPS") and TreeNode:is("TempFile") then
+    if depcmd and not Make.get_flag("NODEPS") and TreeNode.type == "obj" then
       options:add(depcmd);
     end;
     return concat(options, " ");
@@ -2992,7 +2973,7 @@ do -- [tools] ==================================================================
     for j in result:gmatch("%$(%u+)") do
       result = result:gsub("%$"..j, (self["process_"..j](self, TreeNode)));
     end;
-    return result;--:gsub("%s+", " ");
+    return result;
   end;
   --
   function clTool:getSources(par)
@@ -3064,9 +3045,9 @@ do -- [tools] ==================================================================
         par.needs = split(par.needs);
       end;
       for _, ns in ipairs(par.needs) do
-        local n = Make.Needs:find(ns);
+        local n = Needs:find(ns);
         if not n then quitMF("make(): unknown need '%s'.", ns); end
-        for _, f in ipairs(Make.Needs.fields) do
+        for _, f in ipairs(Needs.fields) do
           if n[f] then
             if f == "prerequisites" then
               for pre in n[f]() do
@@ -3173,11 +3154,11 @@ do -- [tools] ==================================================================
     local sources = self:getSources(par);
     if par.odir then
       local result = clTargetList:new();
-      result.prerequisites = sources.prerequisites;
+      --result.prerequisites = sources.prerequisites;
       for sf in sources() do
         local fn = fn_forceExt(fn_basename(sf[1]),self.OBJ_EXT or self.toolchain.OBJ_EXT);
         if type(par[1]) == "string" then fn = par[1] .. "_" .. fn; end;
-        local of = result:new_tempfile(par.odir, fn);
+        local of = result:new_generatedfile(par.odir, fn);
         of.deps    = sf;
         of.tool    = self;
         of.type    = "obj";
@@ -3189,6 +3170,7 @@ do -- [tools] ==================================================================
         of.libs    = sources.libs;
         of.needs   = sources.needs;
         of.from    = sources.from;
+        of.prerequisites = sources.prerequisites;
         sf.deps  = (not Make.get_flag("NODEPS") and self:readDepFile(of)) or nil;
       end;
       if par[1] ~= nil then remove(par, 1); end;
@@ -3204,7 +3186,7 @@ do -- [tools] ==================================================================
   function clTool:action_program(...)
     local par = self:checkParam(...);
     local sources = self:getSources(par);
-    local target = clTargetFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.EXE_EXT));
+    local target = clGeneratedFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.EXE_EXT));
     target.deps          = sources;
     target.defines       = sources.defines;
     target.cflags        = sources.cflags;
@@ -3225,7 +3207,7 @@ do -- [tools] ==================================================================
   function clTool:action_shared(...)
     local par = self:checkParam(...);
     local sources = self:getSources(par);
-    local target = clTargetFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.DLL_EXT));
+    local target = clGeneratedFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.DLL_EXT));
     target.deps          = sources;
     target.defines       = sources.defines;
     target.cflags        = sources.cflags;
@@ -3246,7 +3228,7 @@ do -- [tools] ==================================================================
   function clTool:action_library(...)
     local par = self:checkParam(...);
     local sources = self:getSources(par);
-    local target = clTargetFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.LIB_EXT));
+    local target = clGeneratedFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.toolchain.LIB_EXT));
     target.deps          = sources;
     target.defines       = sources.defines;
     target.incdir        = sources.incdir;
@@ -3415,12 +3397,6 @@ end;
 --
 --=== [toolchains & special targets] ===========================================
 
---- Tools and Actions.
--- Make scripts run in a sandbox with a limited set of lua libraries and 
--- some usefull lua objects named tools.
--- All parameters needs to be stored in a list. The simplest way to do so is by
--- using "{...}" instead of "(...)".
--- @section Tools
 package.preload["tc_msc"]          = function(...) --TODO
   --
   if true then return; end;-- It is a pre alpha skeleton righ now. Better do nothing -.-
@@ -3682,7 +3658,7 @@ package.preload["tc_files"]        = function(...)
     for sf in sources() do
       local dfn = sf[1];
       dfn = (dfn:find(sources.base) == 1) and dfn:gsub(sources.base.."/","") or dfn:match("([^/]*)$");
-      local target = targets:new_targetfile(par.odir, dfn);
+      local target = targets:new_generatedfile(par.odir, dfn);
       target.deps = sf;
       target.tool = self;
       target.type = "copy";
@@ -3698,7 +3674,7 @@ package.preload["tc_files"]        = function(...)
     if type(par.odir) ~= "string" then quitMF("file.link(): 'odir' is missing."); end;
     local targets = clTargetList:new();
     for sf in sources() do
-      local target = targets:new_targetfile(par.odir, sf[1]:sub(#sources.base+2));
+      local target = targets:new_generatedfile(par.odir, sf[1]:sub(#sources.base+2));
       target.deps = sf;
       target.tool = self;
       target.type = "link";
@@ -3729,46 +3705,6 @@ package.preload["tc_files"]        = function(...)
   
   Tool:add_group();
   --
-  Tool = tc:new_tool{"targetfile";
-    SRC_EXT = ".*";
-  };
-  
-  function Tool:action_build(...)
-    local par = self:checkParam(...);
-    local src = self:getSources(par);
-    local tgt = Make.Targets:new_targetfile(par[1]);
-    tgt.deps          = src;
-    tgt.defines       = src.defines;
-    tgt.cflags        = src.cflags;
-    tgt.incdir        = src.incdir;
-    tgt.libdir        = src.libdir;
-    tgt.libs          = src.libs;
-    tgt.needs         = src.needs;
-    tgt.from          = src.from;
-    tgt.prerequisites = src.prerequisites;
-    tgt.tool          = self;
-    par[1] = nil;
-    if par.action then
-      tgt.action = par.action;
-      par.action = nil;
-    end;
-    self:allParamsEaten(par);
-    return tgt;
-  end;
-  
-  Tool:add_action("build");
-  function Tool:build_command(TreeNode)
-    local result;
-    if type(TreeNode.action) == "string" then
-      result = TreeNode.action;
-      for j in result:gmatch("%$(%u+)") do
-        result = result:gsub("%$"..j, (self["process_"..j](self, TreeNode)));
-      end;
-      TreeNode.action = nil;
-    end;
-    return result;
-  end;
-  --
   Tool = tc:new_tool{"tempfile";
     SRC_EXT = ".*";
   };
@@ -3776,7 +3712,7 @@ package.preload["tc_files"]        = function(...)
   function Tool:action_build(...)
     local par = self:checkParam(...);
     local src = self:getSources(par);
-    local tgt = Make.Targets:new_tempfile(par[1]);
+    local tgt = Make.Targets:new_generatedfile(par[1]);
     tgt.deps          = src;
     tgt.defines       = src.defines;
     tgt.cflags        = src.cflags;
@@ -3928,12 +3864,13 @@ package.preload["tc_targets"]      = function(...)
   local Targets    = Make.Targets;
   --
   local function action_clean(self)
-    Make.Tempfiles:delete();
+    for f in Make.Tempfiles() do
+      if not f.target then f:delete(); end;
+    end;
   end;
 
   local function action_CLEAN(self)
     Make.Tempfiles:delete();
-    Make.Targetfiles:delete();
   end;
   --
   local tgt;

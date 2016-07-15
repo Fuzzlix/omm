@@ -40,7 +40,7 @@ local LUAC    = c99.program {'luac52', odir=LUA_BIN, inputs={LUAC_C, LUAICN2, LU
 local LUAINC  = file {src="lua.h lua.hpp luaconf.h lualib.h lauxlib.h", base=LUA_SRC_DIR, odir=LUA_IDIR}
 local LUADOC  = file {src="*", base=LUA_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/lua52/doc"}
 --
-local LUA = group {LUAEXE, LUAC, LUAINC, LUADOC}
+local LUA = group {LUAEXE, LUAC, LUALIB, LUADLL, LUAINC, LUADOC}
 
 target("lua52", LUA)
 
