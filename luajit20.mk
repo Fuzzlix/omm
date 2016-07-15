@@ -57,28 +57,28 @@ local RECDEF  = tempfile {TEMPDIR.."/lj_recdef.h",
                          }
 local LIBDEF  = tempfile {TEMPDIR.."/lj_libdef.h", 
                           src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                          base=JIT_SRC_DIR, deps = BUILDVM,
+                          base=JIT_SRC_DIR, deps=BUILDVM,
                           action = ("%s -m libdef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
                          }
 local FOLDDEF = tempfile {TEMPDIR.."/lj_folddef.h", 
                           src="lj_opt_fold.c", 
-                          base=JIT_SRC_DIR, deps = BUILDVM,
+                          base=JIT_SRC_DIR, deps=BUILDVM,
                           action = ("%s -m folddef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
                          }
-local LJDEPS  = group {FFDEF, BCDEF, RECDEF,LIBDEF, FOLDDEF}
+local LJDEPS  = group {FFDEF, BCDEF, RECDEF, LIBDEF, FOLDDEF}
 local VMDEF   = tempfile {TEMPDIR.."/vmdef.lua", 
                           src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c \z
                                lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                          base=JIT_SRC_DIR, deps = BUILDVM,
+                          base=JIT_SRC_DIR, deps=BUILDVM,
                           action = ("%s -m vmdef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
                          }
 --
 local LUAICON = wresource {"luajit", src="icon", base=JIT_SRC_DIR, odir=TEMPDIR}                                   -- icon resources
 local LUAOBJ  = c99 {"luajit", src="luajit", base=JIT_SRC_DIR, odir=TEMPDIR, from="luajit:defines", cflags=CFLAGS} -- lua program c source
-local SLIBOBJ = c99 {"luajit_s", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR, incdir={TEMPDIR, JIT_SRC_DIR},     -- static lib c source
-                     deps=LJDEPS, from="luajits:defines", cflags=CFLAGS}
 local DLIBOBJ = c99 {"luajit_d", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR, incdir={TEMPDIR, JIT_SRC_DIR},     -- dynamic lib c source
                      deps=LJDEPS, from="luajit:defines", cflags=CFLAGS}
+local SLIBOBJ = c99 {"luajit_s", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR, incdir={TEMPDIR, JIT_SRC_DIR},     -- static lib c source
+                     deps=LJDEPS, from="luajits:defines", cflags=CFLAGS}
 --
 local LUALIB  = c99.library {'lua51', odir=LUA_IDIR, inputs={SLIBOBJ, LJ_VM}}                            -- static lua runtime lib
 local LUADLL  = c99.shared  {'lua51', odir=LUA_BIN, inputs={DLIBOBJ, LJ_VM}}                             -- dynamic lua runtime lib
@@ -88,7 +88,7 @@ local LUAINC  = file {src="lua.h luaconf.h lualib.h lauxlib.h", base=JIT_SRC_DIR
 local LUADOC  = file {src="*", base=JIT_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/luajit/doc"}
 local LUAJIT  = file {src="*.lua", base=JIT_SRC_DIR.."/jit", odir=LUA_CDIR.."/jit", inputs=VMDEF}
 --
-local LUA = group {LUAEXE, LUALIB, LUAINC, LUADOC, LUAJIT}
+local LUA = group {LUAEXE, LUADLL, LUALIB, LUAINC, LUAJIT, LUADOC}
 
 target("luajit", LUA)
 default(LUA)
