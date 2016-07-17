@@ -1,11 +1,11 @@
---- makefile for lua-5.1, lua-5.2, lua-5.3 and modules, ...
+--[[ makefile for lua-5.1, lua-5.2, lua-5.3 and modules, ...
 -- Build a lua environment for windows, where all lua versions resides side by side in one 
 -- directory tree including there modules, libraries, documentation and lua tools.
--- It creates a "_install" folder containing all content you may want for copy 
--- to "c:\lua" (for instance).
+-- It creates a `"install` folder containing all content you may want for copy 
+-- to `c:\lua` (for instance).
 -- This makefile is not intended to work on other OS than Windows.
--- it is tested with TDM-GCC-64 (https://tdm-gcc.tdragon.net/)
---
+-- it is tested with [TDM-GCC-64](https://tdm-gcc.tdragon.net/)
+--]]
 if not WINDOWS then quit("We are not running on Windows?") end;
 --
 -- Adress 32/64 bit targets directly.
@@ -23,7 +23,6 @@ LUA_BIN = LUAROOT.."/_install" -- install dir
 TEMPDIR = LUAROOT.."/tmp"      -- dir for intermediate files
           .. (M32 and "/32" or "") 
           .. (M64 and "/64" or "") 
-
 --CFLAGS  = "-Werror -pipe" -- Make all warnings into errors.
 CFLAGS  = "-pipe"
 --
