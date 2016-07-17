@@ -2055,10 +2055,12 @@ end;
 
 --
 --=== [file & target handling] =================================================
-local clSourceFile, clIncludeFile, clGeneratedFile, clTargetList;
+local clSourceFile, clGeneratedFile, clTargetList;
 local Intermediates, Targets; 
 do 
-  local clMaketreeNode, clTarget, clFile, target, default;
+  local clMaketreeNode, clTarget, clFile, 
+        target, default;
+  local filetimes = {}; -- caching file times.
   --
   -- generic make tree node.
   clMaketreeNode = class.Base:subclass{
@@ -2250,40 +2252,31 @@ do
       clSourceFile.super.__init(self, ...);
       local fn = self[1];
       if fn:find("[%*%?]+") then return; end; -- wildcard detected.
-      if not self:exists() then quitMF("ERROR: cant find source file '%s'.", fn); end;
+      local time = filetimes[fn] 
+      if not time then 
+        time = clSourceFile.super.filetime(self);
+        if time == -1 then quitMF("ERROR: cant find source file '%s'.", fn); end;
+        filetimes[fn] = time;
+      end;
+      self._filetime = time;
       return self;
     end;
   };
   
+  clSourceFile.filetime   = function(self)
+    self._filetime = filetimes[self[1]];
+    return self._filetime;
+  end;
+  
   clSourceFile.needsBuild = function(self, always_make)
     if self._scanned then return self.dirty, self._mtime; end;
-    if not self:exists() then quit("make(): sourcefile '%s' does not exist.", self[1], 0); end;
-    local dirty, modtime, time = false, -1, self:filetime();
+    local dirty, modtime, time = false, -1, self._filetime;
     if self.deps then dirty, modtime = self.deps:needsBuild(always_make); end;
     self.dirty = self.dirty or dirty or always_make;
     self._scanned = true;
     self._mtime = max(time, modtime)
     --dprint(("clSourceFile.needsBuild():         %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, self._mtime;
-  end;
-  --
-  clIncludeFile = clFile:subclass{
-    __classname  = "IncludeFile";
-    __init  = function(self, ...) -- ([<path>,]* filename)
-      clIncludeFile.super.__init(self, ...);
-      local fn = self[1];
-      if fn:find("[%*%?]+") then return; end; -- wildcard detected.
-      if not self:exists() then quitMF("ERROR: cant find included file '%s'.", fn); end;
-      return self;
-    end;
-  };
-  
-  clIncludeFile.needsBuild = function(self, always_make)
-    --dprint(("clIncludeFile.needsBuild():              %s"):format(self[1]));
-    if not self:exists() then
-      quit("make(): included file '%s' does not exist.", self[1], 0); 
-    end;
-    return always_make, self:filetime();
   end;
   --
   clGeneratedFile = clFile:subclass{
@@ -2399,14 +2392,6 @@ do
     return item;
   end;
   
-  clTargetList.new_includefile   = function(self, ...) 
-    local item = clIncludeFile:new(...);
-    if item then 
-      self:add(item); 
-    end;
-    return item;
-  end;
-  
   clTargetList.new_generatedfile = function(self, ...) 
     local item = clGeneratedFile:new(...);
     if item then 
@@ -2426,7 +2411,7 @@ do
       if f:is("GeneratedFile") then f:delete(); end;
     end;
   end;
-  -- 
+  --
   Intermediates = clTargetList:new(); -- all intermediate files.
   Targets       = clTargetList:new(); -- all phony targets.
   --
@@ -2445,8 +2430,8 @@ do
   clMakeScript.default = default;
   clMakeScript.target  = target;
   --
-  clMake.Tempfiles   = Intermediates;
-  clMake.Targets     = Targets;
+  clMake.Tempfiles = Intermediates;
+  clMake.Targets   = Targets;
   --
 end;
 --
@@ -2823,7 +2808,7 @@ do -- [tools] ==================================================================
       if #txt == 0 then return nil; end;
       local tl = clTargetList:new();
       for _, n in ipairs(txt) do
-        tl:new_includefile(n);
+        tl:new_sourcefile(n);
       end;
       return tl;
     end;
