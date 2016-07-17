@@ -19,6 +19,7 @@ local LUA_LDIR   = LUA_BIN.."/lua"
 svn.checkout{"lfs", "https://github.com/keplerproject/luafilesystem/trunk"}
 if make.path.isDir("lfs") then -- module lfs
   --  [[ 
+  --print(make.Needs("lua").LUAVERSION)
   local DOCDIR  = MODULES .. "/lfs/doc/us";
   local MODULES = MODULES .. "/lfs/src";
   local MODS_C  = c99 {"lfs_s", src="lfs", base=MODULES, odir=TEMPDIR, needs="luas", cflags=CFLAGS}
@@ -36,6 +37,7 @@ if make.path.isDir("lfs") then -- module lfs
   --
   --]]
 end;
+
 svn.checkout{"lpeg", "https://github.com/Fuzzlix/lpeg/branches/1.0"}
 if make.path.isDir("lpeg") then -- module lpeg
   -- [[
@@ -96,8 +98,9 @@ end;
 
 svn.checkout{"penlight", "https://github.com/stevedonovan/Penlight/trunk"}
 if make.path.isDir("penlight") then -- module penlight
+  -- [[
   if not make.Targets "penlight" then
-    -- [[ TODO: generate docs
+    -- TODO: generate docs
     local MODULE  = MODULES.."/penlight"
     local SRCDIR  = MODULE.."/lua"
     --
@@ -109,7 +112,7 @@ if make.path.isDir("penlight") then -- module penlight
     target("penlight", PENLIGHT)
     default(PENLIGHT)
   end;
---]]
+  --]]
 end; 
 
 svn.checkout{"winapi", "https://github.com/stevedonovan/winapi/trunk"}
@@ -160,5 +163,7 @@ if make.path.isDir("lanes") then -- module lanes
 end; 
 
 if make.path.isDir("iuplua") then 
+  -- [[
   make "iuplua"
+  --]]
 end;

@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.3.1-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.0-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -867,7 +867,7 @@ do
     return subst(str, nil, T);
   end;
 
-  -- debug print when `_DEBUG = true`
+  -- debug print when `_DEBUG == true`
   function dprint(msg, ...)
     if _DEBUG then print(msg:format(...)); end;
   end;
@@ -1413,7 +1413,7 @@ do -- [error handling] =========================================================
       reason = sFileLine .. reason;
     end;
     io.stderr:write(reason, '\n');
-    os.exit(1);
+    os.exit(2);
   end;
   
   function quitMF(reason, ...)
@@ -1429,7 +1429,7 @@ do -- [error handling] =========================================================
       ("%s:%1.0d: - "):format(fn_canonical(info.short_src), info.currentline) ..
       reason:format(...) .. "\n"
     );
-    os.exit(1);
+    os.exit(2);
   end;
   --
 end;
@@ -1536,11 +1536,11 @@ do
       descr = "Don't echo commands executed.", 
       blockedby = {"printhelp", "printversion", "silent", "verbose"},
     },
-    --{ tag = "question", 
-    --  cmd = {'-q', "--question"}, 
-    --  descr = "Run no recipe; exit status says if up to date.", 
-    --  blockedby = {"printhelp", "printversion", "question"},
-    --},
+    { tag = "question", 
+      cmd = {'-q', "--question"}, 
+      descr = "Run no recipe; exit status says if up to date.", 
+      blockedby = {"printhelp", "printversion", "verbose", "build"},
+    },
     { tag = "jobs", 
       cmd = {'-j', "--jobs"}, 
       descr = 'Run N jobs parallel. (default: # of cores)',
@@ -1927,6 +1927,9 @@ do -- [Make] ===================================================================
           Make.Needs(a);
         end;
       end;
+      if options.question then      -- -q, --question
+        Make.options.silent = true;
+      end;
       -- Late execution of help text display.
       -- This way, loaded toolchains may insert aditional command line switches
       -- BEFORE the help message becomes generated.
@@ -2055,10 +2058,12 @@ end;
 
 --
 --=== [file & target handling] =================================================
-local clSourceFile, clIncludeFile, clGeneratedFile, clTargetList;
-local Sources, Includes, Intermediates, Targets; 
+local clSourceFile, clGeneratedFile, clTargetList;
+local GeneratedFiles, Targets; 
 do 
-  local clMaketreeNode, clTarget, clFile, target, default;
+  local clMaketreeNode, clTarget, clFile, 
+        target, default;
+  local filetimes = {}; -- caching file times.
   --
   -- generic make tree node.
   clMaketreeNode = class.Base:subclass{
@@ -2076,27 +2081,6 @@ do
     error("clMaketreeNode:needsBuild(): abstract method called.");
   end;
 
-  clMaketreeNode.presDirty        = function(self, always_make)
-    local result, mtime = false, -1;
-    if self.prerequisites then
-      local res, mt;
-      for node in self.prerequisites() do
-        res, mt = node:needsBuild(always_make);
-        if res then
-          result = res;
-          mtime = max(mtime, mt);
-        end;
-      end;
-    end;
-    return result, mtime;
-  end;
-  
-  clMaketreeNode.depsDirty        = function(self)
-    if self.deps then
-      return self.deps:needsBuild();
-    end;
-    return false, -1; 
-  end;
   --
   clMaketreeNode.getBuildSequence = function(self)
     local FileList = clTargetList:new();
@@ -2139,7 +2123,7 @@ do
           end;
         end;
       end;
-      if node.action then remember(node); end;
+      if node.action and node.dirty then remember(node); end;
       if node:is("TargetList") then
         for t in node() do deduceLvl(t, lvl); end;
       elseif node:is("Target") then
@@ -2160,7 +2144,7 @@ do
     for i = #lvlTbl, 1, -1 do
       if #lvlTbl[i] == 0 then remove(lvlTbl, i); end;
     end;
-    --[[ debug messages
+    -- [[ debug messages
     if _DEBUG then -- print out some node status.
       local _min, _max = 1/0, -1/0;
       for _, t in ipairs(lvlTbl) do
@@ -2170,6 +2154,7 @@ do
       dprint(("makeNodeQD(): %s nodes in %s level(s). %s..%s nodes/level"):format(#FileList, #lvlTbl, _min, _max));
       -- print filenames ...
       for i, t in ipairs(lvlTbl) do dprint("========== level "..i); for _, n in ipairs(t) do dprint(n[1]); end; end;
+      dprint("===================")
     end;
     --]]
     return lvlTbl;
@@ -2269,79 +2254,71 @@ do
     __init  = function(self, ...) -- ([<path>,]* filename)
       clSourceFile.super.__init(self, ...);
       local fn = self[1];
-      local sf = Sources.__dir[fn];
-      if sf then return sf; end; -- already created entry ..
       if fn:find("[%*%?]+") then return; end; -- wildcard detected.
-      if self:exists() then 
-        Sources:add(self); 
-      else
-        quitMF("ERROR: cant find source file '%s'.", fn); 
+      local time = filetimes[fn] 
+      if not time then 
+        time = clSourceFile.super.filetime(self);
+        if time == -1 then quitMF("ERROR: cant find source file '%s'.", fn); end;
+        filetimes[fn] = time;
       end;
+      self._filetime = time;
       return self;
     end;
   };
+  
+  clSourceFile.filetime   = function(self)
+    self._filetime = filetimes[self[1]];
+    return self._filetime;
+  end;
   
   clSourceFile.needsBuild = function(self, always_make)
     if self._scanned then return self.dirty, self._mtime; end;
-    if not self:exists() then quit("make(): sourcefile '%s' does not exist.", self[1], 0); end;
-    local dirty, modtime, time = false, -1, self:filetime();
+    local dirty, modtime, time = false, -1, self._filetime;
     if self.deps then dirty, modtime = self.deps:needsBuild(always_make); end;
     self.dirty = self.dirty or dirty or always_make;
-    --dprint(("clSourceFile.needsBuild():         %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     self._scanned = true;
     self._mtime = max(time, modtime)
+    --dprint(("clSourceFile.needsBuild():         %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, self._mtime;
-  end;
-  --
-  clIncludeFile = clFile:subclass{
-    __classname  = "IncludeFile";
-    __init  = function(self, ...) -- ([<path>,]* filename)
-      clIncludeFile.super.__init(self, ...);
-      local fn = self[1];
-      local sf = Includes.__dir[fn];
-      if sf then return sf; end; -- already created entry ..
-      if fn:find("[%*%?]+") then return; end; -- wildcard detected.
-      if self:exists() then 
-        Includes:add(self); 
-      else
-        quitMF("ERROR: cant find included file '%s'.", fn); 
-      end;
-      return self;
-    end;
-  };
-  
-  clIncludeFile.needsBuild = function(self, always_make)
-    if not self:exists() then
-      quit("make(): included file '%s' does not exist.", self[1], 0); 
-    end;
-    return always_make, self:filetime();
   end;
   --
   clGeneratedFile = clFile:subclass{
     __classname  = "GeneratedFile",
     __init  = function(self, ...) -- ([<path>,]* filename)
       clGeneratedFile.super.__init(self, ...);
-      Intermediates:add(self);
+      GeneratedFiles:add(self);
       return self;
     end,
   };
   
   clGeneratedFile.needsBuild = function(self, always_make)
-    if self._scanned then return self.dirty, self._mtime; end;
+    if self._scanned then return self.target and self.dirty, self._mtime; end;
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
       quit("make(): file '%s' does not exist.", self[1], 0); 
     end;
-    local dirty, modtime = self:presDirty(always_make);
-    local time = self:filetime() or -1;
+    --dprint(("clGeneratedFile.needsBuild():            %s =>"):format(self[1]));
+    local time    = self:filetime() or -1;
+    local dirty   = time == -1;
+    local modtime = -1;
+    if self.prerequisites then
+      local res, mt;
+      for node in self.prerequisites() do
+        res, mt = node:needsBuild(always_make);
+        if res then
+          dirty = dirty or res;
+          modtime = max(modtime, mt);
+        end;
+      end;
+    end;
     self.dirty = self.dirty or dirty or time < modtime or always_make;
     time = max(time, modtime);
     if self.deps then
       dirty, modtime = self.deps:needsBuild(always_make);
       self.dirty = self.dirty or dirty or (time < modtime);
     end;
-    dprint(("clGeneratedFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     self._scanned = true;
     self._mtime = max(time, modtime)
+    --dprint(("clGeneratedFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, self._mtime;
   end;
   
@@ -2415,14 +2392,6 @@ do
     return item;
   end;
   
-  clTargetList.new_includefile   = function(self, ...) 
-    local item = clIncludeFile:new(...);
-    if item then 
-      self:add(item); 
-    end;
-    return item;
-  end;
-  
   clTargetList.new_generatedfile = function(self, ...) 
     local item = clGeneratedFile:new(...);
     if item then 
@@ -2442,11 +2411,9 @@ do
       if f:is("GeneratedFile") then f:delete(); end;
     end;
   end;
-  -- 
-  Sources       = clTargetList:new(); -- all sources.
-  Includes      = clTargetList:new(); -- all headers/sources included by source files.
-  Intermediates = clTargetList:new(); -- all intermediate files.
-  Targets       = clTargetList:new(); -- all phony targets.
+  --
+  GeneratedFiles = clTargetList:new(); -- all intermediate files.
+  Targets        = clTargetList:new(); -- all phony targets.
   --
   function target(label, deps, ...)
     if select('#', ...) > 0 or deps == nil then quitMF("target(): parameter error. Did you use {}?"); end;
@@ -2463,10 +2430,8 @@ do
   clMakeScript.default = default;
   clMakeScript.target  = target;
   --
-  clMake.Sources     = Sources;
-  clMake.Includes    = Includes;
-  clMake.Tempfiles   = Intermediates;
-  clMake.Targets     = Targets;
+  clMake.Tempfiles = GeneratedFiles;
+  clMake.Targets   = Targets;
   --
 end;
 --
@@ -2646,14 +2611,14 @@ do -- [make pass 2 + 3] ========================================================
   function runMake()
     local always_make = Make.options.build;
     local just_print  = Make.options.dont_execute;
-    local quiet       = Make.options.quiet;
+    local quiet       = Make.options.silent;
     local verbose     = Make.options.verbose;
     local strict      = not Make.options.nostrict; --TODO:
     local targets;
     --
     local function getTarget()
       if targets == nil then
-        if not Make.Targets:find("default") then
+        if not Targets:find("default") then
           for node in Make.Tempfiles() do
             if node.type == "prog" or node.type == "slib" or node.type == "dlib" then 
               MakeScript.default(node); 
@@ -2664,13 +2629,13 @@ do -- [make pass 2 + 3] ========================================================
           targets = split(Make.target, ",");
           for i = 1, #targets do
             local ts = targets[i];
-            targets[i] = Make.Targets:find(ts)
+            targets[i] = Targets:find(ts)
             if not targets[i] then 
               quit("make(): no target '%s' defined.", ts, 0); 
             end;
           end;
         else
-          local startAt = Make.Targets:find("default");
+          local startAt = Targets:find("default");
           if #startAt == 0 then 
             quit("make(): no idea, what to make. (no progs or libs defined.)", 0); 
           end;
@@ -2686,6 +2651,7 @@ do -- [make pass 2 + 3] ========================================================
     -- pass 2
     local function needsBuild(treeNode)
       local res = treeNode:needsBuild(always_make);
+      if Make.options.question then os.exit(res and 1 or 0); end;
       if not res then 
         if not quiet then print("... all up to date."); end;
       end;
@@ -2843,7 +2809,7 @@ do -- [tools] ==================================================================
       if #txt == 0 then return nil; end;
       local tl = clTargetList:new();
       for _, n in ipairs(txt) do
-        tl:new_includefile(n);
+        tl:new_sourcefile(n);
       end;
       return tl;
     end;
@@ -3705,11 +3671,11 @@ package.preload["tc_files"]        = function(...)
   
   Tool:add_group();
   --
-  Tool = tc:new_tool{"tempfile";
+  Tool = tc:new_tool{"rule";
     SRC_EXT = ".*";
   };
   
-  function Tool:action_build(...)
+  function Tool:action_build(...) --TODO
     local par = self:checkParam(...);
     local src = self:getSources(par);
     local tgt = Make.Targets:new_generatedfile(par[1]);
@@ -3733,7 +3699,7 @@ package.preload["tc_files"]        = function(...)
   end;
   
   Tool:add_action("build");
-  function Tool:build_command(TreeNode)
+  function Tool:build_command(TreeNode) -- TODO
     local result;
     if type(TreeNode.action) == "string" then
       result = TreeNode.action;
