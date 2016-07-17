@@ -2056,7 +2056,7 @@ end;
 --
 --=== [file & target handling] =================================================
 local clSourceFile, clIncludeFile, clGeneratedFile, clTargetList;
-local Sources, Includes, Intermediates, Targets; 
+local Intermediates, Targets; 
 do 
   local clMaketreeNode, clTarget, clFile, target, default;
   --
@@ -2076,27 +2076,6 @@ do
     error("clMaketreeNode:needsBuild(): abstract method called.");
   end;
 
-  clMaketreeNode.presDirty        = function(self, always_make)
-    local result, mtime = false, -1;
-    if self.prerequisites then
-      local res, mt;
-      for node in self.prerequisites() do
-        res, mt = node:needsBuild(always_make);
-        if res then
-          result = res;
-          mtime = max(mtime, mt);
-        end;
-      end;
-    end;
-    return result, mtime;
-  end;
-  
-  clMaketreeNode.depsDirty        = function(self)
-    if self.deps then
-      return self.deps:needsBuild();
-    end;
-    return false, -1; 
-  end;
   --
   clMaketreeNode.getBuildSequence = function(self)
     local FileList = clTargetList:new();
@@ -2139,7 +2118,7 @@ do
           end;
         end;
       end;
-      if node.action then remember(node); end;
+      if node.action and node.dirty then remember(node); end;
       if node:is("TargetList") then
         for t in node() do deduceLvl(t, lvl); end;
       elseif node:is("Target") then
@@ -2160,7 +2139,7 @@ do
     for i = #lvlTbl, 1, -1 do
       if #lvlTbl[i] == 0 then remove(lvlTbl, i); end;
     end;
-    --[[ debug messages
+    -- [[ debug messages
     if _DEBUG then -- print out some node status.
       local _min, _max = 1/0, -1/0;
       for _, t in ipairs(lvlTbl) do
@@ -2170,6 +2149,7 @@ do
       dprint(("makeNodeQD(): %s nodes in %s level(s). %s..%s nodes/level"):format(#FileList, #lvlTbl, _min, _max));
       -- print filenames ...
       for i, t in ipairs(lvlTbl) do dprint("========== level "..i); for _, n in ipairs(t) do dprint(n[1]); end; end;
+      dprint("===================")
     end;
     --]]
     return lvlTbl;
@@ -2269,14 +2249,8 @@ do
     __init  = function(self, ...) -- ([<path>,]* filename)
       clSourceFile.super.__init(self, ...);
       local fn = self[1];
-      local sf = Sources.__dir[fn];
-      if sf then return sf; end; -- already created entry ..
       if fn:find("[%*%?]+") then return; end; -- wildcard detected.
-      if self:exists() then 
-        Sources:add(self); 
-      else
-        quitMF("ERROR: cant find source file '%s'.", fn); 
-      end;
+      if not self:exists() then quitMF("ERROR: cant find source file '%s'.", fn); end;
       return self;
     end;
   };
@@ -2287,9 +2261,9 @@ do
     local dirty, modtime, time = false, -1, self:filetime();
     if self.deps then dirty, modtime = self.deps:needsBuild(always_make); end;
     self.dirty = self.dirty or dirty or always_make;
-    --dprint(("clSourceFile.needsBuild():         %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     self._scanned = true;
     self._mtime = max(time, modtime)
+    --dprint(("clSourceFile.needsBuild():         %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, self._mtime;
   end;
   --
@@ -2298,19 +2272,14 @@ do
     __init  = function(self, ...) -- ([<path>,]* filename)
       clIncludeFile.super.__init(self, ...);
       local fn = self[1];
-      local sf = Includes.__dir[fn];
-      if sf then return sf; end; -- already created entry ..
       if fn:find("[%*%?]+") then return; end; -- wildcard detected.
-      if self:exists() then 
-        Includes:add(self); 
-      else
-        quitMF("ERROR: cant find included file '%s'.", fn); 
-      end;
+      if not self:exists() then quitMF("ERROR: cant find included file '%s'.", fn); end;
       return self;
     end;
   };
   
   clIncludeFile.needsBuild = function(self, always_make)
+    --dprint(("clIncludeFile.needsBuild():              %s"):format(self[1]));
     if not self:exists() then
       quit("make(): included file '%s' does not exist.", self[1], 0); 
     end;
@@ -2327,11 +2296,26 @@ do
   };
   
   clGeneratedFile.needsBuild = function(self, always_make)
-    if self._scanned then return self.dirty, self._mtime; end;
+    --if self[1] == "d:/_sources/omm/tmp/32/lua52/lfs_lfs.o" then
+    --  _DEBUG = true;
+    --  dprint(self[1])
+    --end;
+    if self._scanned then return self.target and self.dirty, self._mtime; end;
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
       quit("make(): file '%s' does not exist.", self[1], 0); 
     end;
-    local dirty, modtime = self:presDirty(always_make);
+    dprint(("clGeneratedFile.needsBuild():            %s =>"):format(self[1]));
+    local dirty, modtime = false, -1;
+    if self.prerequisites then
+      local res, mt;
+      for node in self.prerequisites() do
+        res, mt = node:needsBuild(always_make);
+        if res then
+          dirty = dirty or res;
+          modtime = max(modtime, mt);
+        end;
+      end;
+    end;
     local time = self:filetime() or -1;
     self.dirty = self.dirty or dirty or time < modtime or always_make;
     time = max(time, modtime);
@@ -2339,9 +2323,9 @@ do
       dirty, modtime = self.deps:needsBuild(always_make);
       self.dirty = self.dirty or dirty or (time < modtime);
     end;
-    dprint(("clGeneratedFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     self._scanned = true;
     self._mtime = max(time, modtime)
+    dprint(("clGeneratedFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, self._mtime;
   end;
   
@@ -2443,8 +2427,6 @@ do
     end;
   end;
   -- 
-  Sources       = clTargetList:new(); -- all sources.
-  Includes      = clTargetList:new(); -- all headers/sources included by source files.
   Intermediates = clTargetList:new(); -- all intermediate files.
   Targets       = clTargetList:new(); -- all phony targets.
   --
@@ -2463,8 +2445,6 @@ do
   clMakeScript.default = default;
   clMakeScript.target  = target;
   --
-  clMake.Sources     = Sources;
-  clMake.Includes    = Includes;
   clMake.Tempfiles   = Intermediates;
   clMake.Targets     = Targets;
   --
