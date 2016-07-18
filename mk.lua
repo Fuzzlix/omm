@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.1-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.2-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -3608,6 +3608,7 @@ package.preload["tc_files"]        = function(...)
   local choose     = Make.utils.choose;
   local WINDOWS    = Make.WINDOWS;
   local canonical  = Make.path.canonical;
+  local unpack     = unpack or table.unpack;
   
   local tc = Toolchains:new_toolchain{__satisfy = {"files"}};
   --
@@ -3700,7 +3701,7 @@ package.preload["tc_files"]        = function(...)
       for i, s in ipairs(par.action) do
         if class(s, "File") then par.action[i] = canonical(s[1]); end;
       end;
-      par.action = par.action[1]:format(table.unpack(par.action, 2));
+      par.action = par.action[1]:format(unpack(par.action, 2));
     end;
     if type(par.action) == "string" then
       tgt.action = par.action;
