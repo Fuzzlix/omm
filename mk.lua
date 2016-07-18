@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.0-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.1-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -1902,6 +1902,7 @@ do -- [Make] ===================================================================
       end;
       if options.makefile then     -- -f, --makefile
         options.makefile = fn_path_lua(fn_abs(fn_defaultExt(Make.options.makefile, "mk")));
+        makefile = options.makefile;
       end;
       if options.toolchains then   -- -t, --toolchains
         Make.Tools:load(Make.options.toolchains);
@@ -2636,7 +2637,7 @@ do -- [make pass 2 + 3] ========================================================
           end;
         else
           local startAt = Targets:find("default");
-          if #startAt == 0 then 
+          if not startAt or #startAt == 0 then 
             quit("make(): no idea, what to make. (no progs or libs defined.)", 0); 
           end;
           targets = {startAt};
@@ -3606,7 +3607,7 @@ package.preload["tc_files"]        = function(...)
   local Toolchains = Make.Tools;
   local choose     = Make.utils.choose;
   local WINDOWS    = Make.WINDOWS;
-  local canonical = Make.path.canonical;
+  local canonical  = Make.path.canonical;
   
   local tc = Toolchains:new_toolchain{__satisfy = {"files"}};
   --
