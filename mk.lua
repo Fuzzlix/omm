@@ -3606,6 +3606,7 @@ package.preload["tc_files"]        = function(...)
   local Toolchains = Make.Tools;
   local choose     = Make.utils.choose;
   local WINDOWS    = Make.WINDOWS;
+  local canonical = Make.path.canonical;
   
   local tc = Toolchains:new_toolchain{__satisfy = {"files"}};
   --
@@ -3675,7 +3676,7 @@ package.preload["tc_files"]        = function(...)
     SRC_EXT = ".*";
   };
   
-  function Tool:action_build(...) --TODO
+  function Tool:action_define(...)
     local par = self:checkParam(...);
     local src = self:getSources(par);
     local tgt = Make.Targets:new_generatedfile(par[1]);
@@ -3689,17 +3690,47 @@ package.preload["tc_files"]        = function(...)
     tgt.from          = src.from;
     tgt.prerequisites = src.prerequisites;
     tgt.tool          = self;
+    tgt.type          = "rule";
     par[1] = nil;
-    if par.action then
+    --
+    if not par.action    then quitMF("rule(): no action given."); end;
+    if class(par.action) then quitMF("rule(): action needs to be a string or list of strings/nodes."); end;
+    if type(par.action) == "table" then
+      for i, s in ipairs(par.action) do
+        if class(s, "File") then par.action[i] = canonical(s[1]); end;
+      end;
+      par.action = par.action[1]:format(table.unpack(par.action, 2));
+    end;
+    if type(par.action) == "string" then
       tgt.action = par.action;
       par.action = nil;
+    else
+      quitMF("rule(): action needs to be a string or list of strings/nodes.");
+    end;
+    --
+    if par.prog then
+      local prog = par.prog;
+      if type(prog) == "string" then
+        par.prog = nil;
+      elseif class(prog, "File") then
+        tgt.prerequisites:add(prog)
+        prog = canonical(par.prog[1]);
+        par.prog = nil;
+      else
+        quitMF("rule(): invalid parameter 'prog'.");
+      end;
+      if tgt.action:find("$PROG%f[%U]") then
+        tgt.action = tgt.action:gsub("$PROG", prog);
+      else
+        quitMF("rule(): no field '$PROG' in 'action' found.");
+      end;
     end;
     self:allParamsEaten(par);
     return tgt;
   end;
   
-  Tool:add_action("build");
-  function Tool:build_command(TreeNode) -- TODO
+  Tool:add_action("define");
+  function Tool:build_command(TreeNode)
     local result;
     if type(TreeNode.action) == "string" then
       result = TreeNode.action;

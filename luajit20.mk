@@ -25,53 +25,48 @@ if not make.path.isDir("luaJIT20") then
 end
 --
 local MINILUA = c99.program {TEMPDIR.."/minilua", src="minilua.c", base=JIT_HOSTDIR, incdir=JIT_SRC_DIR}
-local ARCHH   = rule {TEMPDIR.."/buildvm_arch.h", deps = MINILUA,
-                          action = ("%s %s %s -D JIT -D FFI -D FPU -D HFABI -D VER= -D WIN -o $OUTFILE %s"):format(
-                                    MINILUA:canonical(), "luaJIT20/dynasm/dynasm.lua", 
-                                    make.get_flag"M32" and "" or "-D P64", "luaJIT20/src/vm_x86.dasc")
-                         }
+local ARCHH   = rule {TEMPDIR.."/buildvm_arch.h", prog=MINILUA,
+                      action = {"$PROG %s %s -D JIT -D FFI -D FPU -D HFABI -D VER= -D WIN -o $OUTFILE %s", -- command line template
+                                "luaJIT20/dynasm/dynasm.lua",          -- 1st %s
+                                make.get_flag"M32" and "" or "-D P64", -- 2nd %s
+                                "luaJIT20/src/vm_x86.dasc"             -- 3rd %s
+                               }
+                     }
 local BUILDVM = c99.program {TEMPDIR.."/buildvm", 
                              src="buildvm buildvm_asm buildvm_peobj buildvm_lib buildvm_fold", 
                              base=JIT_HOSTDIR, incdir={JIT_SRC_DIR, TEMPDIR}, deps = ARCHH,
                              defines="LJ_ARCH_HASFPU=1 LJ_ABI_SOFTFP=0 LUAJIT_TARGET=LUAJIT_ARCH_"..
                                (make.get_flag"M32" and "x86" or "x64")
                             }
-local LJ_VM   = rule {TEMPDIR.."/lj_vm.o", 
-                      deps = BUILDVM,
-                      action = ("%s -m peobj -o $OUTFILE"):format(BUILDVM:canonical()),
+local LJ_VM   = rule {TEMPDIR.."/lj_vm.o", prog=BUILDVM,
+                      action = "$PROG -m peobj -o $OUTFILE"
                      }
-local FFDEF   = rule {TEMPDIR.."/lj_ffdef.h", 
-                          src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                          base=JIT_SRC_DIR, deps = BUILDVM,
-                          action = ("%s -m ffdef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
-                         }
-local BCDEF   = rule {TEMPDIR.."/lj_bcdef.h", 
-                          src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                          base=JIT_SRC_DIR, deps = BUILDVM,
-                          action = ("%s -m bcdef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
-                         }
-local RECDEF  = rule {TEMPDIR.."/lj_recdef.h", 
-                          src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                          base=JIT_SRC_DIR, deps = BUILDVM,
-                          action = ("%s -m recdef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
-                         }
-local LIBDEF  = rule {TEMPDIR.."/lj_libdef.h", 
-                          src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                          base=JIT_SRC_DIR, deps=BUILDVM,
-                          action = ("%s -m libdef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
-                         }
-local FOLDDEF = rule {TEMPDIR.."/lj_folddef.h", 
-                          src="lj_opt_fold.c", 
-                          base=JIT_SRC_DIR, deps=BUILDVM,
-                          action = ("%s -m folddef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
-                         }
+local FFDEF   = rule {TEMPDIR.."/lj_ffdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
+                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
+                      action = "$PROG -m ffdef -o $OUTFILE $SOURCES"
+                     }
+local BCDEF   = rule {TEMPDIR.."/lj_bcdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
+                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
+                      action = "$PROG -m bcdef -o $OUTFILE $SOURCES"
+                     }
+local RECDEF  = rule {TEMPDIR.."/lj_recdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
+                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
+                      action = "$PROG -m recdef -o $OUTFILE $SOURCES"
+                     }
+local LIBDEF  = rule {TEMPDIR.."/lj_libdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
+                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
+                      action = "$PROG -m libdef -o $OUTFILE $SOURCES"
+                     }
+local FOLDDEF = rule {TEMPDIR.."/lj_folddef.h", base=JIT_SRC_DIR, prog=BUILDVM,
+                      src="lj_opt_fold.c", 
+                      action = "$PROG -m folddef -o $OUTFILE $SOURCES"
+                     }
 local LJDEPS  = group {FFDEF, BCDEF, RECDEF, LIBDEF, FOLDDEF}
-local VMDEF   = rule {TEMPDIR.."/vmdef.lua", 
-                          src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c \z
-                               lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                          base=JIT_SRC_DIR, deps=BUILDVM,
-                          action = ("%s -m vmdef -o $OUTFILE $SOURCES"):format(BUILDVM:canonical()),
-                         }
+local VMDEF   = rule {TEMPDIR.."/vmdef.lua", base=JIT_SRC_DIR, prog=BUILDVM,
+                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c \z
+                           lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
+                      action = "$PROG -m vmdef -o $OUTFILE $SOURCES"
+                     }
 --
 local LUAICON = wresource {"luajit", src="icon", base=JIT_SRC_DIR, odir=TEMPDIR}                                   -- icon resources
 local LUAOBJ  = c99 {"luajit", src="luajit", base=JIT_SRC_DIR, odir=TEMPDIR, from="luajit:defines", cflags=CFLAGS} -- lua program c source
@@ -88,7 +83,7 @@ local LUAINC  = file {src="lua.h luaconf.h lualib.h lauxlib.h", base=JIT_SRC_DIR
 local LUADOC  = file {src="*", base=JIT_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/luajit/doc"}
 local LUAJIT  = file {src="*.lua", base=JIT_SRC_DIR.."/jit", odir=LUA_CDIR.."/jit", inputs=VMDEF}
 --
-local LUA = group {LUAEXE, LUADLL, LUALIB, LUAINC, LUAJIT, LUADOC}
+local LUA     = {LUAEXE, LUADLL, LUALIB, LUAINC, LUAJIT, LUADOC}
 
 target("luajit", LUA)
 default(LUA)
