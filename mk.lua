@@ -3681,7 +3681,7 @@ package.preload["tc_files"]        = function(...)
   function Tool:action_define(...)
     local par = self:checkParam(...);
     local src = self:getSources(par);
-    local tgt = Make.Targets:new_generatedfile(par[1]);
+    local tgt = Make.Targets:new_generatedfile(par.odir, par[1]);
     tgt.deps          = src;
     tgt.defines       = src.defines;
     tgt.cflags        = src.cflags;
@@ -3694,6 +3694,7 @@ package.preload["tc_files"]        = function(...)
     tgt.tool          = self;
     tgt.type          = "rule";
     par[1] = nil;
+    par.odir = nil;
     --
     if not par.action    then quitMF("rule(): no action given."); end;
     if class(par.action) then quitMF("rule(): action needs to be a string or list of strings/nodes."); end;
@@ -3716,11 +3717,12 @@ package.preload["tc_files"]        = function(...)
         par.prog = nil;
       elseif class(prog, "File") then
         tgt.prerequisites:add(prog)
-        prog = canonical(par.prog[1]);
+        prog = par.prog[1];
         par.prog = nil;
       else
         quitMF("rule(): invalid parameter 'prog'.");
       end;
+      prog = canonical(prog);
       if tgt.action:find("$PROG%f[%U]") then
         tgt.action = tgt.action:gsub("$PROG", prog);
       else
