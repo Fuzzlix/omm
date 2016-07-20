@@ -79,12 +79,15 @@ table, td {
 	border: none; 
 }
 
-td, th {
+td {
+	padding-left: 1em ;
+	padding-right: 1em ;
   border-bottom: 2px solid #dedefe;
 }
 
 th {
   padding: 4px ;
+	padding-left: 1em ;
 	vertical-align: top ;
 	background-color: #dedefe ;
 	border: none ; 

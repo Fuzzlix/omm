@@ -154,7 +154,7 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 
 <h2 id="actionparameters">Action parameters</h2>
 
-<p><strong>parameters unterstood by most tools:</strong></p>
+<h3 id="parametersunterstoodbymosttools:">parameters unterstood by most tools:</h3>
 
 <table>
 <colgroup>
@@ -229,18 +229,18 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 </tr>
 <tr>
 	<td><strong>inputs</strong></td>
-	<td><em>MaketreeNodes</em></td>
+	<td><em>MaketreeNode</em></td>
 	<td>Other MaketreeNodes used as sources for compilation.</td>
 </tr>
 <tr>
 	<td><strong>deps</strong></td>
-	<td><em>MaketreeNodes</em></td>
+	<td><em>MaketreeNode</em></td>
 	<td>Other MaketreeNodes needs to be built before this node. Unlike <code>&quot;inputs&quot;</code>, those nodes do not become part of the generated command line</td>
 </tr>
 </tbody>
 </table>
 
-<p><strong>aditional parameters unterstood by rule:</strong></p>
+<h3 id="aditionalparametersunterstoodbyrule:">aditional parameters unterstood by rule:</h3>
 
 <table>
 <colgroup>
@@ -270,6 +270,30 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 </tr>
 </tbody>
 </table>
+
+<h3 id="parametertypes:">Parameter types:</h3>
+
+<dl>
+<dt><em>string</em></dt>
+<dd>A lua string containing 1 value, e.g. a filename, define, path, &#8230;<br/>
+example: <code>base=&quot;src&quot;</code></dd>
+
+<dt><em>stringlist</em></dt>
+<dd>A collection of string values.<br/>
+a): all values space delimitted in one string e.g.<br/>
+ <code>libs=&quot;kernel32 user32 gdi32 winspool comdlg32&quot;</code><br/>
+b): A lua table containing strings with one value. e.g.<br/>
+ <code>libs={&quot;kernel32&quot;, &quot;user32&quot;, &quot;gdi32&quot;, &quot;winspool&quot;, &quot;comdlg32&quot;}</code><br/>
+ Note: A list b) containing lists a) is <em>not</em> allowed.</dd>
+
+<dt><em>MaketreeNode</em></dt>
+<dd>A lua value returned by a <em>tool</em> or <em>action</em> call, containing ..<br/>
+a) all informations needed to build and/or use a file in a make run or ..<br/>
+b) one or more <em>MaketreeNode</em>&#8217;s .</dd>
+
+<dt><em>MaketreeNodes</em></dt>
+<dd>A <em>MaketreeNode</em> or a lua table containing <em>MaketreeNode</em>&#8217;s.</dd>
+</dl>
 
 </body>
 </html>

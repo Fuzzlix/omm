@@ -140,27 +140,50 @@ Off cause, with all the knowlege we have now, we can write this simple example s
 
 ## Action parameters
 
-__parameters unterstood by most tools:__
+### parameters unterstood by most tools:
 
-| name    | type            | description                                                |
-|---------|-----------------|------------------------------------------------------------|
-| __[1]__     | _string_        | filename or filename prefix for the generated file. May also include a absolute or relative path.              |
-| __src__     | _stringlist_    | a list of sourcefiles. The extensions may be omittet if the tool knows the default extensions to look for.      |
-| __base__    | _string_        | base folder where the sources are stored.                  |
-| __odir__    | _string_        | folder where to store the compiled files.                  |
-| __incdir__  | _stringlist_    | a list of directories where to seach includefiles.         |
-| __libdir__  | _stringlist_    | a list of directories where to seach librarys.             |
-| __libs__    | _stringlist_    | a list of libraries needed to link a executable or library. |
-| __cflags__  | _stringlist_    | a list of compilerflags.                                   |
-| __defines__ | _stringlist_    | a list of defines.                                         |
-| __needs__   | _stringlist_    | a list of needs to pull parameters from and use them in addition. |
-| __from__    | _string_        | pull parameters from a need. e.g: `from="lua:cflags,defines"` reads the fields `cflags` and `defines` from the need "lua" and uses it in addition to all given parameters.                                   |
-| __inputs__  | _MaketreeNodes_ | Other MaketreeNodes used as sources for compilation.       |
-| __deps__    | _MaketreeNodes_ | Other MaketreeNodes needs to be built before this node. Unlike `"inputs"`, those nodes do not become part of the generated command line |
+| name        | type            | description                                                                                                |
+|-------------|-----------------|------------------------------------------------------------------------------------------------------------|
+| __[1]__     | _string_        | filename or filename prefix for the generated file. May also include a absolute or relative path.          |
+| __src__     | _stringlist_    | a list of sourcefiles. The extensions may be omittet if the tool knows the default extensions to look for. |
+| __base__    | _string_        | base folder where the sources are stored.                                                                  |
+| __odir__    | _string_        | folder where to store the compiled files.                                                                  |
+| __incdir__  | _stringlist_    | a list of directories where to seach includefiles.                                                         |
+| __libdir__  | _stringlist_    | a list of directories where to seach librarys.                                                             |
+| __libs__    | _stringlist_    | a list of libraries needed to link a executable or library.                                                |
+| __cflags__  | _stringlist_    | a list of compilerflags.                                                                                   |
+| __defines__ | _stringlist_    | a list of defines.                                                                                         |
+| __needs__   | _stringlist_    | a list of needs to pull parameters from and use them in addition.                                          |
+| __from__    | _string_        | pull parameters from a need. e.g: `from="lua:cflags,defines"` reads the fields `cflags` and `defines` from the need "lua" and uses it in addition to all given parameters.|
+| __inputs__  | _MaketreeNode_ | Other MaketreeNodes used as sources for compilation.                                                        |
+| __deps__    | _MaketreeNode_ | Other MaketreeNodes needs to be built before this node. Unlike `"inputs"`, those nodes do not become part of the generated command line |
 
-__aditional parameters unterstood by rule:__
+### aditional parameters unterstood by rule:
 
-| name    | type                   | description                                                |
-|---------|------------------------|------------------------------------------------------------|
-| __prog__    | _string_\|_node_ | executable to be used in this rule.                        |
-| __type__    | _string_           | type of the generated file. default: none. `"obj"`, `"slib"`, `"dlib"` and `"prog"` are predefined types used by all tools and can be used with care. |
+| name        | type              | description                                                |
+|-------------|-------------------|------------------------------------------------------------|
+| __prog__    | _string_\|_node_  | executable to be used in this rule.                        |
+| __type__    | _string_          | type of the generated file. default: none. `"obj"`, `"slib"`, `"dlib"` and `"prog"` are predefined types used by all tools and can be used with care. |
+
+### Parameter types:
+
+_string_ 
+: A lua string containing 1 value, e.g. a filename, define, path, ...  
+example: `base="src"`
+
+_stringlist_ 
+: A collection of string values.  
+a): all values space delimitted in one string e.g.  
+	  `libs="kernel32 user32 gdi32 winspool comdlg32"`  
+b): A lua table containing strings with one value. e.g.  
+	  `libs={"kernel32", "user32", "gdi32", "winspool", "comdlg32"}`  
+		Note: A list b) containing lists a) is _not_ allowed.
+
+_MaketreeNode_ 
+: A lua value returned by a _tool_ or _action_ call, containing ..  
+a) all informations needed to build and/or use a file in a make run or ..  
+b) one or more _MaketreeNode_'s .
+
+_MaketreeNodes_ 
+: A _MaketreeNode_ or a lua table containing _MaketreeNode_'s.
+
