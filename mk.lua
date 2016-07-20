@@ -3699,8 +3699,6 @@ package.preload["tc_files"]        = function(...)
       else
         quitMF("target(): parameter 'type' needs to be a string.")
       end;
-    else
-      tgt.type = "rule";
     end;
     par[1] = nil;
     par.odir = nil;
