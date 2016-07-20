@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.2-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.3-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -1946,7 +1946,7 @@ do -- [Make] ===================================================================
     if type(cmd) == "string" then cmd = split(cmd); end;
     if MAKELEVEL == 0 then -- parse the command line ...
       -- Load preloaded toolchains.
-      Make.Tools:load("gnu msc files targets repositories lua");
+      Make.Tools:load("gnu msc targets repositories lua");
       --
       makefile, target = parseCommandline(cmd);
       self.target = target;
@@ -2739,6 +2739,7 @@ do -- [tools] ==================================================================
     "command", "command_slib", "command_dlib", "command_prog", "command_dep",
     "SW_SHARED", "SW_COMPILE", "PROG_slib",
     };
+  local unpack = unpack or table.unpack;
   --
   clTool = class.Base:subclass{
     __classname = "Tool",
@@ -3360,6 +3361,133 @@ do -- [tools] ==================================================================
     Tools:load(tchnname);
   end;
   --
+  local tc = Tools:new_toolchain{__satisfy = {}};
+  --
+  local Tool = tc:new_tool{ "file",
+    SRC_EXT      = ".*",
+    OUT_EXT      = ".*",
+    command_copy = choose(WINDOWS, "copy", "cp") .. " $SOURCES $OUTFILE    ",
+    command_link = choose(WINDOWS, "copy", "cp --link") .. " $SOURCES $OUTFILE    ",
+  };
+  
+  function Tool:action_copy(...)
+    local par = self:checkParam(...);
+    local sources = self:getSources(par);
+    if type(par.odir) ~= "string" then quitMF("file.copy(): 'odir' is missing."); end;
+    local targets = clTargetList:new();
+    for sf in sources() do
+      local dfn = sf[1];
+      dfn = (dfn:find(sources.base) == 1) and dfn:gsub(sources.base.."/","") or dfn:match("([^/]*)$");
+      local target = targets:new_generatedfile(par.odir, dfn);
+      target.deps = sf;
+      target.tool = self;
+      target.type = "copy";
+    end;
+    return targets;
+  end;
+  
+  Tool:add_action("copy");
+  --
+  Tool = tc:new_tool{"group";
+    SRC_EXT = ".*";
+  };
+  
+  function Tool:action_group(...)
+    local par = self:checkParam(...);
+    if not par.inputs then
+      local inputs = {};
+      for i = 1, #par do
+        inputs[i] = par[i];
+        par[i] = nil;
+      end;
+      par.inputs = inputs;
+    end;
+    local res = self:getSources(par);
+    self:allParamsEaten(par);
+    return res;
+  end;
+  
+  Tool:add_group();
+  --
+  Tool = tc:new_tool{"rule";
+    SRC_EXT = ".*";
+  };
+  
+  function Tool:action_define(...)
+    local par = self:checkParam(...);
+    local src = self:getSources(par);
+    local tgt = Make.Targets:new_generatedfile(par.odir, par[1]);
+    tgt.deps          = src;
+    tgt.defines       = src.defines;
+    tgt.cflags        = src.cflags;
+    tgt.incdir        = src.incdir;
+    tgt.libdir        = src.libdir;
+    tgt.libs          = src.libs;
+    tgt.needs         = src.needs;
+    tgt.from          = src.from;
+    tgt.prerequisites = src.prerequisites;
+    tgt.tool          = self;
+    if par.type then
+      if type(par.type) == "string" then
+        tgt.type = par.type;
+        par.type = nil;
+      else
+        quitMF("target(): parameter 'type' needs to be a string.")
+      end;
+    end;
+    par[1] = nil;
+    par.odir = nil;
+    --
+    if not par.action    then quitMF("rule(): no action given."); end;
+    if class(par.action) then quitMF("rule(): action needs to be a string or list of strings/nodes."); end;
+    if type(par.action) == "table" then
+      for i, s in ipairs(par.action) do
+        if class(s, "File") then par.action[i] = canonical(s[1]); end;
+      end;
+      par.action = par.action[1]:format(unpack(par.action, 2));
+    end;
+    if type(par.action) == "string" then
+      tgt.action = par.action;
+      par.action = nil;
+    else
+      quitMF("rule(): action needs to be a string or list of strings/nodes.");
+    end;
+    --
+    if par.prog then
+      local prog = par.prog;
+      if type(prog) == "string" then
+        par.prog = nil;
+      elseif class(prog, "File") then
+        tgt.prerequisites:add(prog)
+        prog = par.prog[1];
+        par.prog = nil;
+      else
+        quitMF("rule(): invalid parameter 'prog'.");
+      end;
+      prog = fn_canonical(prog);
+      if tgt.action:find("$PROG%f[%U]") then
+        tgt.action = tgt.action:gsub("$PROG", prog);
+      else
+        quitMF("rule(): no field '$PROG' in 'action' found.");
+      end;
+    end;
+    self:allParamsEaten(par);
+    return tgt;
+  end;
+  
+  Tool:add_action("define");
+  function Tool:build_command(TreeNode)
+    local result;
+    if type(TreeNode.action) == "string" then
+      result = TreeNode.action;
+      for j in result:gmatch("%$(%u+)") do
+        result = result:gsub("%$"..j, (self["process_"..j](self, TreeNode)));
+      end;
+      TreeNode.action = nil;
+    end;
+    return result;
+  end;
+  --
 end;
 --
 --=== [toolchains & special targets] ===========================================
@@ -3601,161 +3729,6 @@ package.preload["tc_gnu64"]        = function(...)
   return Toolchain;
 end;
 
-package.preload["tc_files"]        = function(...) 
-  --
-  local Make       = require "Make";
-  local Toolchains = Make.Tools;
-  local choose     = Make.utils.choose;
-  local WINDOWS    = Make.WINDOWS;
-  local canonical  = Make.path.canonical;
-  local unpack     = unpack or table.unpack;
-  
-  local tc = Toolchains:new_toolchain{__satisfy = {"files"}};
-  --
-  local Tool = tc:new_tool{ "file",
-    SRC_EXT      = ".*",
-    OUT_EXT      = ".*",
-    command_copy = choose(WINDOWS, "copy", "cp") .. " $SOURCES $OUTFILE    ",
-    command_link = choose(WINDOWS, "copy", "cp --link") .. " $SOURCES $OUTFILE    ",
-  };
-  
-  function Tool:action_copy(...)
-    local par = self:checkParam(...);
-    local sources = self:getSources(par);
-    if type(par.odir) ~= "string" then quitMF("file.copy(): 'odir' is missing."); end;
-    local targets = clTargetList:new();
-    for sf in sources() do
-      local dfn = sf[1];
-      dfn = (dfn:find(sources.base) == 1) and dfn:gsub(sources.base.."/","") or dfn:match("([^/]*)$");
-      local target = targets:new_generatedfile(par.odir, dfn);
-      target.deps = sf;
-      target.tool = self;
-      target.type = "copy";
-    end;
-    return targets;
-  end;
-  
-  Tool:add_action("copy");
-  --
-  function Tool:action_link(...)
-    local par = self:checkParam(...);
-    local sources = self:getSources(par);
-    if type(par.odir) ~= "string" then quitMF("file.link(): 'odir' is missing."); end;
-    local targets = clTargetList:new();
-    for sf in sources() do
-      local target = targets:new_generatedfile(par.odir, sf[1]:sub(#sources.base+2));
-      target.deps = sf;
-      target.tool = self;
-      target.type = "link";
-    end;
-    return targets;
-  end;
-  
-  Tool:add_action("link");
-  --
-  Tool = tc:new_tool{"group";
-    SRC_EXT = ".*";
-  };
-  
-  function Tool:action_group(...)
-    local par = self:checkParam(...);
-    if not par.inputs then
-      local inputs = {};
-      for i = 1, #par do
-        inputs[i] = par[i];
-        par[i] = nil;
-      end;
-      par.inputs = inputs;
-    end;
-    local res = self:getSources(par);
-    self:allParamsEaten(par);
-    return res;
-  end;
-  
-  Tool:add_group();
-  --
-  Tool = tc:new_tool{"rule";
-    SRC_EXT = ".*";
-  };
-  
-  function Tool:action_define(...)
-    local par = self:checkParam(...);
-    local src = self:getSources(par);
-    local tgt = Make.Targets:new_generatedfile(par.odir, par[1]);
-    tgt.deps          = src;
-    tgt.defines       = src.defines;
-    tgt.cflags        = src.cflags;
-    tgt.incdir        = src.incdir;
-    tgt.libdir        = src.libdir;
-    tgt.libs          = src.libs;
-    tgt.needs         = src.needs;
-    tgt.from          = src.from;
-    tgt.prerequisites = src.prerequisites;
-    tgt.tool          = self;
-    if par.type then
-      if type(par.type) == "string" then
-        tgt.type = par.type;
-        par.type = nil;
-      else
-        quitMF("target(): parameter 'type' needs to be a string.")
-      end;
-    end;
-    par[1] = nil;
-    par.odir = nil;
-    --
-    if not par.action    then quitMF("rule(): no action given."); end;
-    if class(par.action) then quitMF("rule(): action needs to be a string or list of strings/nodes."); end;
-    if type(par.action) == "table" then
-      for i, s in ipairs(par.action) do
-        if class(s, "File") then par.action[i] = canonical(s[1]); end;
-      end;
-      par.action = par.action[1]:format(unpack(par.action, 2));
-    end;
-    if type(par.action) == "string" then
-      tgt.action = par.action;
-      par.action = nil;
-    else
-      quitMF("rule(): action needs to be a string or list of strings/nodes.");
-    end;
-    --
-    if par.prog then
-      local prog = par.prog;
-      if type(prog) == "string" then
-        par.prog = nil;
-      elseif class(prog, "File") then
-        tgt.prerequisites:add(prog)
-        prog = par.prog[1];
-        par.prog = nil;
-      else
-        quitMF("rule(): invalid parameter 'prog'.");
-      end;
-      prog = canonical(prog);
-      if tgt.action:find("$PROG%f[%U]") then
-        tgt.action = tgt.action:gsub("$PROG", prog);
-      else
-        quitMF("rule(): no field '$PROG' in 'action' found.");
-      end;
-    end;
-    self:allParamsEaten(par);
-    return tgt;
-  end;
-  
-  Tool:add_action("define");
-  function Tool:build_command(TreeNode)
-    local result;
-    if type(TreeNode.action) == "string" then
-      result = TreeNode.action;
-      for j in result:gmatch("%$(%u+)") do
-        result = result:gsub("%$"..j, (self["process_"..j](self, TreeNode)));
-      end;
-      TreeNode.action = nil;
-    end;
-    return result;
-  end;
-  --
-  return tc;
-end;
-
 package.preload["tc_lua"]          = function(...) --TODO
   --
   local Make       = require "Make";
@@ -3890,9 +3863,9 @@ package.preload["tc_targets"]      = function(...)
   return nil; -- no new toolchain to return.
 end;
 --
---require "tc_files" -- if a Toolchain dont load, require it here to see error messages
---                   -- created by the toolchain. Normally they become required in 
---                   -- a pcall() and you can't see any errors.
+--require "tc_xxx" -- if a Toolchain dont load, require it here to see error messages
+--                 -- created by the toolchain. Normally they become required in 
+--                 -- a pcall() and you can't see any errors.
 --
 -- [main] ======================================================================
 --
