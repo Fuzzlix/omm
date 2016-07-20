@@ -3692,7 +3692,16 @@ package.preload["tc_files"]        = function(...)
     tgt.from          = src.from;
     tgt.prerequisites = src.prerequisites;
     tgt.tool          = self;
-    tgt.type          = "rule";
+    if par.type then
+      if type(par.type) == "string" then
+        tgt.type = par.type;
+        par.type = nil;
+      else
+        quitMF("target(): parameter 'type' needs to be a string.")
+      end;
+    else
+      tgt.type = "rule";
+    end;
     par[1] = nil;
     par.odir = nil;
     --
