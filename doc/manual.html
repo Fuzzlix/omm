@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8"/>
+	<title>OMM manual</title>
+	<meta name="author" content="Ulrich Schmidt"/>
+	<link type="text/css" rel="stylesheet" href="omm.css
+...."/>
+</head>
+<body>
+
+<h1 id="makefiles">Makefiles</h1>
+
+<p>Makefiles are lua scripts running a a special lua environment supplying usefull functions and informations.</p>
+
+<h2 id="firststepsnodesandrules">First steps (Nodes and Rules)</h2>
+
+<p>Makefiles define the relationship between source files and generated files. Internally all informations
+for files are stored in so called <em>nodes</em>, defining the file name, a command to build the file, all kind of parameters
+needed to build the file and relations to files/<em>nodes</em> the <em>node</em> depends on.</p>
+
+<p>The most native way to define a <em>node</em> is the <code>rule</code> tool. To compile a c source to a executable using the
+gnu compiler collection, you may define the following rule in your makefile.</p>
+
+<pre><code>-- example_01.mk
+NODE = rule {&quot;hello.exe&quot;, 
+             src=&quot;hello.c&quot;, 
+             action=&quot;gcc $SOURCES -o $OUTFILE&quot;
+            }
+default(NODE)
+</code></pre>
+
+<p>The rule() line creates 2 nodes, one node for the target file &#8220;hello.exe&#8221; and one node behind the scene for the source file &#8220;hello.c&#8221;.
+To generate/compile the target file, the command line given in the <code>&quot;action&quot;</code> parameter becomes executed.
+As you can see, you can use a set of $-variables in the command line. In this example the $SOURCES variable becomes
+substituted by &#8220;hello.c&#8221; and $OUTFILE by &#8220;hello.exe&#8221;. The gnu c compiler <code>gcc</code> is hard coded in the commandline.
+The <code>default()</code> command defines the node, where to start calculating the build order. </p>
+
+<hr />
+
+<p>In most cases it is needed to provide aditional parameters in the command line. For instance we want to
+specify optimization options and more. It is usual to provide those compiler switches in a variable or
+parameter named <code>cflags</code>. Those cflags (and some other options) will substitute the <code>$OPTIONS</code> command line variable.</p>
+
+<pre><code>-- example_02.mk
+NODE = rule {&quot;hello.exe&quot;, 
+             src=&quot;hello.c&quot;, 
+             cflags=&quot;-O2 -s&quot;, 
+             action=&quot;gcc $OPTIONS $SOURCES -o $OUTFILE&quot;
+            }
+default(NODE) 
+</code></pre>
+
+<hr />
+
+<p>The program to call can also be given by a <code>prog</code> parameter. This parameter can be a string
+containing any valid executable name or a <em>node</em> defined earlier in the makefile.</p>
+
+<pre><code>-- example_03.mk
+local CFLAGS = &quot;-O2 -s&quot;
+local PROG   = &quot;gcc&quot;
+local CMDLN  = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
+--
+NODE = rule {&quot;hello.exe&quot;, 
+             src=&quot;hello.c&quot;, cflags=CFLAGS, prog=PROG, action=CMDLN}
+default(NODE)
+</code></pre>
+
+<hr />
+
+<p>Until now we used filenames without paths. But source files are not allway stored
+in one folder and generated files are usually not stored in the same folder as the sources.
+By default all file names are relative to the makefile location. In the previous examples
+the sources are located in the same folder as the makefile and the generated files went
+into this folder too.</p>
+
+<p>In the next example we store the generated executable in a <code>bin/</code> subfolder. To do so, we define
+a parameter <code>&quot;odir&quot;</code>. The odir parameter in the next example is a relative path and this means
+this path is relative to the makefile location. It is possible to use absolute paths for <code>&quot;odir&quot;</code>.
+All directories needed will be created automatically.</p>
+
+<pre><code>-- example_04.mk
+local CFLAGS = &quot;-O2 -s&quot;
+local PROG   = &quot;gcc&quot;
+local CMDLN  = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
+--
+NODE = rule {&quot;hello.exe&quot;, 
+             src=&quot;hello.c&quot;, odir=&quot;bin&quot;, cflags=CFLAGS, prog=PROG, action=CMDLN}
+default(NODE)
+</code></pre>
+
+<p>Sources may be found in a different folder than the makefile. To avoid writing long paths for each sourcefile,
+it is possible to define a <code>&quot;base&quot;</code> parameter. This parameter defines a relative or absolute path where the
+source files given in the src parameter are located.<br/>
+Site note: When writing makefiles, use slashes in paths, even on Windows! Slashes will be automatically
+converted to backslashes for Windows command lines.</p>
+
+<pre><code>-- example_05.mk
+local CFLAGS = &quot;-O2 -s&quot;
+local PROG   = &quot;gcc&quot;
+local CMDLN  = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
+--
+NODE = rule {&quot;hello.exe&quot;, 
+             src=&quot;hello.c&quot;, odir=&quot;bin&quot;, base=&quot;src&quot;, cflags=CFLAGS, prog=PROG, action=CMDLN}
+default(NODE)
+</code></pre>
+
+<hr />
+
+<p>In previous examples the c source was compiled directly to a executable. In large projects it is usual to
+compile each source to a object file and finally link all object files to a executable or library.
+The next example compiles the c source to a objectfile and stores the build rule for the object file in <code>NODE_OBJ</code>.
+<code>NODE_OBJ</code> is a <em>node</em> and can&#8217;t be handed over to <code>NODE_EXE</code> as a <code>&quot;src&quot;</code> parameter. To define <em>nodes</em> as sources,
+we use the <code>&quot;inputs&quot;</code> parameter. Both <code>&quot;src&quot;</code> and <code>&quot;inputs&quot;</code> can be used at the same time and substitute the <code>$SOURCES</code>
+command line variable.</p>
+
+<pre><code>-- example_06.mk
+local CFLAGS     = &quot;-O2 -s&quot;
+local PROG       = &quot;gcc&quot;
+local CMDCOMPILE = &quot;$PROG -c $OPTIONS $SOURCES -o $OUTFILE&quot;
+local CMDLINK    = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
+--
+NODE_OBJ = rule {&quot;hello.obj&quot;,
+                 src=&quot;hello.c&quot;, odir=&quot;tmp&quot;, base=&quot;src&quot;, cflags=CFLAGS, prog=PROG, action=CMDCOMPILE}
+NODE_EXE = rule {&quot;hello.exe&quot;, 
+                 inputs=NODE_OBJ, odir=&quot;bin&quot;, cflags=CFLAGS, prog=PROG, action=CMDLINK}
+default(NODE_EXE)
+</code></pre>
+
+<p>As you can imagine, writing makefiles for huge projects in this way results in much writing effort
+and is not comfortable. Therefore the are handy tools ready to allow simpler makefile syntax.
+The next example use the <code>cc</code> <em>tool</em>&#8217;s <code>.group()</code> and <code>.program()</code> <em>actions</em>. The <code>cc</code> <em>tool</em> deals with standard c files.<br/>
+The <code>.group()</code> <em>action</em> creates a <em>node</em> that compiles all given c sources to object files. The file names for temporary
+object files are generated automatically.
+The <code>.program()</code> <em>action</em> creates a node for a executable to build. It also store additional informations behind the scene,
+for instance: The node builds a executable! (If no default target is defined, all executables and libraries defined
+will be assumed to be the default targets.)
+All <code>cc</code> <em>actions</em> are os aware and choose file extensions as needed. Our next example will build a <code>&quot;hello.exe&quot;</code> on
+Windows and a <code>&quot;hello&quot;</code> on *nix.</p>
+
+<pre><code>-- example_07.mk
+NODE_OBJ = cc.group {src=&quot;hello&quot;, odir=&quot;tmp&quot;, base=&quot;src&quot;}
+NODE_EXE = cc.program {&quot;hello&quot;, inputs=NODE_OBJ, odir=&quot;bin&quot;}
+default(NODE_EXE)
+</code></pre>
+
+<p>Off cause, with all the knowlege we have now, we can write this simple example shorter:</p>
+
+<pre><code>-- example_08.mk
+cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir=&quot;bin&quot;}
+</code></pre>
+
+<h2 id="actionparameters">Action parameters</h2>
+
+<p><strong>parameters unterstood by most tools:</strong></p>
+
+<table>
+<colgroup>
+<col style="text-align:left;"/>
+<col style="text-align:left;"/>
+<col style="text-align:left;"/>
+</colgroup>
+
+<thead>
+<tr>
+	<th style="text-align:left;">name</th>
+	<th style="text-align:left;">type</th>
+	<th style="text-align:left;">description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+	<td style="text-align:left;"></td>
+	<td style="text-align:left;"></td>
+	<td style="text-align:left;"></td>
+</tr>
+<tr>
+	<td style="text-align:left;">[1]</td>
+	<td style="text-align:left;"><em>string</em></td>
+	<td style="text-align:left;">filename or filename prefix for the generated file. May also include a absolute or relative path.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">src</td>
+	<td style="text-align:left;"><em>stringlist</em></td>
+	<td style="text-align:left;">a list of sourcefiles. The extensions may be omittet if the tool knows the default extensions to look for.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">base</td>
+	<td style="text-align:left;"><em>string</em></td>
+	<td style="text-align:left;">base folder where the sources are stored.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">odir</td>
+	<td style="text-align:left;"><em>string</em></td>
+	<td style="text-align:left;">folder where to store the compiled files.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">incdir</td>
+	<td style="text-align:left;"><em>stringlist</em></td>
+	<td style="text-align:left;">a list of directories where to seach includefiles.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">libdir</td>
+	<td style="text-align:left;"><em>stringlist</em></td>
+	<td style="text-align:left;">a list of directories where to seach librarys.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">cflags</td>
+	<td style="text-align:left;"><em>stringlist</em></td>
+	<td style="text-align:left;">a list of compilerflags.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">defines</td>
+	<td style="text-align:left;"><em>stringlist</em></td>
+	<td style="text-align:left;">a list of defines.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">from</td>
+	<td style="text-align:left;"><em>string</em></td>
+	<td style="text-align:left;">pull parameters from a need.</td>
+</tr>
+<tr>
+	<td style="text-align:left;"></td>
+	<td style="text-align:left;"></td>
+	<td style="text-align:left;">e.g: <code>from=&quot;lua:cflags,defines&quot;</code> reads the fields <code>cflags</code> and <code>defines</code> from the need &#8220;lua&#8221; and uses it in addition to all given parameters.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">inputs</td>
+	<td style="text-align:left;"><em>MaketreeNodes</em></td>
+	<td style="text-align:left;">Other MaketreeNodes used as sources for compilation.</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>aditional parameters unterstood by rule:</strong></p>
+
+<table>
+<colgroup>
+<col style="text-align:left;"/>
+<col style="text-align:left;"/>
+<col style="text-align:left;"/>
+</colgroup>
+
+<thead>
+<tr>
+	<th style="text-align:left;">name</th>
+	<th style="text-align:left;">type</th>
+	<th style="text-align:left;">description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+	<td style="text-align:left;"></td>
+	<td style="text-align:left;"></td>
+	<td style="text-align:left;"></td>
+</tr>
+<tr>
+	<td style="text-align:left;">prog</td>
+	<td style="text-align:left;"><em>string</em> or <em>node</em></td>
+	<td style="text-align:left;">executable to be used in this rule.</td>
+</tr>
+<tr>
+	<td style="text-align:left;">type</td>
+	<td style="text-align:left;"><em>string</em></td>
+	<td style="text-align:left;">type of the generated file. default: none.</td>
+</tr>
+<tr>
+	<td style="text-align:left;"></td>
+	<td style="text-align:left;"></td>
+	<td style="text-align:left;"><code>&quot;obj&quot;</code>, <code>&quot;slib&quot;</code>, <code>&quot;dlib&quot;</code> and <code>&quot;prog&quot;</code> are predefined types used by all tools and can be used with care.</td>
+</tr>
+</tbody>
+</table>
+
+</body>
+</html>
