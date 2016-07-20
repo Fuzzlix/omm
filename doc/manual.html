@@ -89,6 +89,8 @@ NODE = rule {&quot;hello.exe&quot;,
 default(NODE)
 </code></pre>
 
+<hr />
+
 <p>Sources may be found in a different folder than the makefile. To avoid writing long paths for each sourcefile,
 it is possible to define a <code>&quot;base&quot;</code> parameter. This parameter defines a relative or absolute path where the
 source files given in the src parameter are located.<br/>
@@ -156,79 +158,84 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 
 <table>
 <colgroup>
-<col style="text-align:left;"/>
-<col style="text-align:left;"/>
-<col style="text-align:left;"/>
+<col/>
+<col/>
+<col/>
 </colgroup>
 
 <thead>
 <tr>
-	<th style="text-align:left;">name</th>
-	<th style="text-align:left;">type</th>
-	<th style="text-align:left;">description</th>
+	<th>name</th>
+	<th>type</th>
+	<th>description</th>
 </tr>
 </thead>
 
 <tbody>
 <tr>
-	<td style="text-align:left;"></td>
-	<td style="text-align:left;"></td>
-	<td style="text-align:left;"></td>
+	<td><strong>[1]</strong></td>
+	<td><em>string</em></td>
+	<td>filename or filename prefix for the generated file. May also include a absolute or relative path.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">[1]</td>
-	<td style="text-align:left;"><em>string</em></td>
-	<td style="text-align:left;">filename or filename prefix for the generated file. May also include a absolute or relative path.</td>
+	<td><strong>src</strong></td>
+	<td><em>stringlist</em></td>
+	<td>a list of sourcefiles. The extensions may be omittet if the tool knows the default extensions to look for.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">src</td>
-	<td style="text-align:left;"><em>stringlist</em></td>
-	<td style="text-align:left;">a list of sourcefiles. The extensions may be omittet if the tool knows the default extensions to look for.</td>
+	<td><strong>base</strong></td>
+	<td><em>string</em></td>
+	<td>base folder where the sources are stored.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">base</td>
-	<td style="text-align:left;"><em>string</em></td>
-	<td style="text-align:left;">base folder where the sources are stored.</td>
+	<td><strong>odir</strong></td>
+	<td><em>string</em></td>
+	<td>folder where to store the compiled files.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">odir</td>
-	<td style="text-align:left;"><em>string</em></td>
-	<td style="text-align:left;">folder where to store the compiled files.</td>
+	<td><strong>incdir</strong></td>
+	<td><em>stringlist</em></td>
+	<td>a list of directories where to seach includefiles.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">incdir</td>
-	<td style="text-align:left;"><em>stringlist</em></td>
-	<td style="text-align:left;">a list of directories where to seach includefiles.</td>
+	<td><strong>libdir</strong></td>
+	<td><em>stringlist</em></td>
+	<td>a list of directories where to seach librarys.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">libdir</td>
-	<td style="text-align:left;"><em>stringlist</em></td>
-	<td style="text-align:left;">a list of directories where to seach librarys.</td>
+	<td><strong>libs</strong></td>
+	<td><em>stringlist</em></td>
+	<td>a list of libraries needed to link a executable or library.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">cflags</td>
-	<td style="text-align:left;"><em>stringlist</em></td>
-	<td style="text-align:left;">a list of compilerflags.</td>
+	<td><strong>cflags</strong></td>
+	<td><em>stringlist</em></td>
+	<td>a list of compilerflags.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">defines</td>
-	<td style="text-align:left;"><em>stringlist</em></td>
-	<td style="text-align:left;">a list of defines.</td>
+	<td><strong>defines</strong></td>
+	<td><em>stringlist</em></td>
+	<td>a list of defines.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">from</td>
-	<td style="text-align:left;"><em>string</em></td>
-	<td style="text-align:left;">pull parameters from a need.</td>
+	<td><strong>needs</strong></td>
+	<td><em>stringlist</em></td>
+	<td>a list of needs to pull parameters from and use them in addition.</td>
 </tr>
 <tr>
-	<td style="text-align:left;"></td>
-	<td style="text-align:left;"></td>
-	<td style="text-align:left;">e.g: <code>from=&quot;lua:cflags,defines&quot;</code> reads the fields <code>cflags</code> and <code>defines</code> from the need &#8220;lua&#8221; and uses it in addition to all given parameters.</td>
+	<td><strong>from</strong></td>
+	<td><em>string</em></td>
+	<td>pull parameters from a need. e.g: <code>from=&quot;lua:cflags,defines&quot;</code> reads the fields <code>cflags</code> and <code>defines</code> from the need &#8220;lua&#8221; and uses it in addition to all given parameters.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">inputs</td>
-	<td style="text-align:left;"><em>MaketreeNodes</em></td>
-	<td style="text-align:left;">Other MaketreeNodes used as sources for compilation.</td>
+	<td><strong>inputs</strong></td>
+	<td><em>MaketreeNodes</em></td>
+	<td>Other MaketreeNodes used as sources for compilation.</td>
+</tr>
+<tr>
+	<td><strong>deps</strong></td>
+	<td><em>MaketreeNodes</em></td>
+	<td>Other MaketreeNodes needs to be built before this node. Unlike <code>&quot;inputs&quot;</code>, those nodes do not become part of the generated command line</td>
 </tr>
 </tbody>
 </table>
@@ -237,39 +244,29 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 
 <table>
 <colgroup>
-<col style="text-align:left;"/>
-<col style="text-align:left;"/>
-<col style="text-align:left;"/>
+<col/>
+<col/>
+<col/>
 </colgroup>
 
 <thead>
 <tr>
-	<th style="text-align:left;">name</th>
-	<th style="text-align:left;">type</th>
-	<th style="text-align:left;">description</th>
+	<th>name</th>
+	<th>type</th>
+	<th>description</th>
 </tr>
 </thead>
 
 <tbody>
 <tr>
-	<td style="text-align:left;"></td>
-	<td style="text-align:left;"></td>
-	<td style="text-align:left;"></td>
+	<td><strong>prog</strong></td>
+	<td><em>string</em>|<em>node</em></td>
+	<td>executable to be used in this rule.</td>
 </tr>
 <tr>
-	<td style="text-align:left;">prog</td>
-	<td style="text-align:left;"><em>string</em> or <em>node</em></td>
-	<td style="text-align:left;">executable to be used in this rule.</td>
-</tr>
-<tr>
-	<td style="text-align:left;">type</td>
-	<td style="text-align:left;"><em>string</em></td>
-	<td style="text-align:left;">type of the generated file. default: none.</td>
-</tr>
-<tr>
-	<td style="text-align:left;"></td>
-	<td style="text-align:left;"></td>
-	<td style="text-align:left;"><code>&quot;obj&quot;</code>, <code>&quot;slib&quot;</code>, <code>&quot;dlib&quot;</code> and <code>&quot;prog&quot;</code> are predefined types used by all tools and can be used with care.</td>
+	<td><strong>type</strong></td>
+	<td><em>string</em></td>
+	<td>type of the generated file. default: none. <code>&quot;obj&quot;</code>, <code>&quot;slib&quot;</code>, <code>&quot;dlib&quot;</code> and <code>&quot;prog&quot;</code> are predefined types used by all tools and can be used with care.</td>
 </tr>
 </tbody>
 </table>

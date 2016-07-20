@@ -79,6 +79,8 @@ All directories needed will be created automatically.
 	             src="hello.c", odir="bin", cflags=CFLAGS, prog=PROG, action=CMDLN}
 	default(NODE)
 
+---
+
 Sources may be found in a different folder than the makefile. To avoid writing long paths for each sourcefile, 
 it is possible to define a `"base"` parameter. This parameter defines a relative or absolute path where the 
 source files given in the src parameter are located.  
@@ -141,25 +143,24 @@ Off cause, with all the knowlege we have now, we can write this simple example s
 __parameters unterstood by most tools:__
 
 | name    | type            | description                                                |
-|:--------|:----------------|:-----------------------------------------------------------|
-|         |                 |                                                            |
-| [1]     | _string_        | filename or filename prefix for the generated file. May also include a absolute or relative path.              |
-| src     | _stringlist_    | a list of sourcefiles. The extensions may be omittet if the tool knows the default extensions to look for.      |
-| base    | _string_        | base folder where the sources are stored.                  |
-| odir    | _string_        | folder where to store the compiled files.                  |
-| incdir  | _stringlist_    | a list of directories where to seach includefiles.         |
-| libdir  | _stringlist_    | a list of directories where to seach librarys.             |
-| cflags  | _stringlist_    | a list of compilerflags.                                   |
-| defines | _stringlist_    | a list of defines.                                         |
-| from    | _string_        | pull parameters from a need.                               |
-|         |                 | e.g: `from="lua:cflags,defines"` reads the fields `cflags` and `defines` from the need "lua" and uses it in addition to all given parameters.                                   |
-| inputs  | _MaketreeNodes_ | Other MaketreeNodes used as sources for compilation.       |
+|---------|-----------------|------------------------------------------------------------|
+| __[1]__     | _string_        | filename or filename prefix for the generated file. May also include a absolute or relative path.              |
+| __src__     | _stringlist_    | a list of sourcefiles. The extensions may be omittet if the tool knows the default extensions to look for.      |
+| __base__    | _string_        | base folder where the sources are stored.                  |
+| __odir__    | _string_        | folder where to store the compiled files.                  |
+| __incdir__  | _stringlist_    | a list of directories where to seach includefiles.         |
+| __libdir__  | _stringlist_    | a list of directories where to seach librarys.             |
+| __libs__    | _stringlist_    | a list of libraries needed to link a executable or library. |
+| __cflags__  | _stringlist_    | a list of compilerflags.                                   |
+| __defines__ | _stringlist_    | a list of defines.                                         |
+| __needs__   | _stringlist_    | a list of needs to pull parameters from and use them in addition. |
+| __from__    | _string_        | pull parameters from a need. e.g: `from="lua:cflags,defines"` reads the fields `cflags` and `defines` from the need "lua" and uses it in addition to all given parameters.                                   |
+| __inputs__  | _MaketreeNodes_ | Other MaketreeNodes used as sources for compilation.       |
+| __deps__    | _MaketreeNodes_ | Other MaketreeNodes needs to be built before this node. Unlike `"inputs"`, those nodes do not become part of the generated command line |
 
 __aditional parameters unterstood by rule:__
 
-| name    | type               | description                                                |
-|:--------|:-------------------|:-----------------------------------------------------------|
-|         |                    |                                                            |
-| prog    | _string_ or _node_ | executable to be used in this rule.                        |
-| type    | _string_           | type of the generated file. default: none.                 |
-|         |                    | `"obj"`, `"slib"`, `"dlib"` and `"prog"` are predefined types used by all tools and can be used with care. |
+| name    | type                   | description                                                |
+|---------|------------------------|------------------------------------------------------------|
+| __prog__    | _string_\|_node_ | executable to be used in this rule.                        |
+| __type__    | _string_           | type of the generated file. default: none. `"obj"`, `"slib"`, `"dlib"` and `"prog"` are predefined types used by all tools and can be used with care. |
