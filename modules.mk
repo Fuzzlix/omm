@@ -115,7 +115,7 @@ if make.path.isDir("penlight") then -- module penlight
   --]]
 end; 
 
-svn.checkout{"winapi", "https://github.com/stevedonovan/winapi/trunk"}
+svn.checkout{"winapi", "https://github.com/Fuzzlix/winapi/trunk"}
 if make.path.isDir("winapi") then -- module winapi
   -- [[
   local MODULES = MODULES.."/winapi"
