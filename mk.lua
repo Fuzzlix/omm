@@ -1635,6 +1635,8 @@ do
       --
       function spawn(cmd)
         --dprint("spawn\t\t%s\t%s", #Processes, n_threads)
+        cmd = comspec..cmd;
+        if #cmd > 32767 then quit("spawn(): commandline too long (%s chars)", #cmd); end;
         return winapi.spawn_process(comspec..cmd);
       end;
       --
