@@ -2778,14 +2778,6 @@ do -- [tools] ==================================================================
     if Make.options.define then 
       res:add(Make.options.define);
     end;
-    while not class(TreeNode, "SourceFile") do
-      TreeNode = TreeNode.deps;
-      if TreeNode then
-        if TreeNode.defines then res:add(TreeNode.defines); end;
-      else
-        break
-      end;
-    end;
     return res
   end;
   
@@ -2948,7 +2940,6 @@ do -- [tools] ==================================================================
   --
   function clTool:getSources(par)
     local sources = clTargetList:new();
-    sources.prerequisites = clTargetList:new();
     sources.cflags        = class.StrList:new();
     sources.defines       = class.StrList:new();
     sources.incdir        = class.StrList:new();
@@ -2956,6 +2947,7 @@ do -- [tools] ==================================================================
     sources.libs          = class.StrList:new();
     sources.from          = class.StrList:new();
     sources.base          = fn_abs(par.base or ".");
+    sources.prerequisites = clTargetList:new();
     sources.tool          = self;
     -- src = ...
     if par.src     then
@@ -3444,7 +3436,7 @@ do -- [tools] ==================================================================
     if class(par.action) then quitMF("rule(): action needs to be a string or list of strings/nodes."); end;
     if type(par.action) == "table" then
       for i, s in ipairs(par.action) do
-        if class(s, "File") then par.action[i] = canonical(s[1]); end;
+        if class(s, "File") then par.action[i] = fn_canonical(s[1]); end;
       end;
       par.action = par.action[1]:format(unpack(par.action, 2));
     end;
