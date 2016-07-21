@@ -143,7 +143,7 @@ Off cause, with all the knowlege we have now, we can write this simple example s
 ### parameters unterstood by most tools:
 
 | name        | type            | description                                                                                                |
-|-------------|-----------------|------------------------------------------------------------------------------------------------------------|
+|-------------|:----------------|------------------------------------------------------------------------------------------------------------|
 | __[1]__     | _string_        | filename or filename prefix for the generated file. May also include a absolute or relative path.          |
 | __src__     | _stringlist_    | a list of sourcefiles. The extensions may be omittet if the tool knows the default extensions to look for. |
 | __base__    | _string_        | base folder where the sources are stored.                                                                  |
@@ -161,8 +161,8 @@ Off cause, with all the knowlege we have now, we can write this simple example s
 ### aditional parameters unterstood by rule:
 
 | name        | type              | description                                                |
-|-------------|-------------------|------------------------------------------------------------|
-| __prog__    | _string_\|_node_  | executable to be used in this rule.                        |
+|-------------|:------------------|------------------------------------------------------------|
+| __prog__    | _string_ or _MaketreeNode_  | executable to be used in this rule.                        |
 | __type__    | _string_          | type of the generated file. default: none. `"obj"`, `"slib"`, `"dlib"` and `"prog"` are predefined types used by all tools and can be used with care. |
 
 ### Parameter types:
