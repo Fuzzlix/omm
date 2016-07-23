@@ -48,24 +48,6 @@ local FFDEF  = gendefh {"lj_ffdef.h",  mode="ffdef" }
 local BCDEF  = gendefh {"lj_bcdef.h",  mode="bcdef" }
 local RECDEF = gendefh {"lj_recdef.h", mode="recdef"}
 local LIBDEF = gendefh {"lj_libdef.h", mode="libdef"}
---[[--
-local FFDEF   = rule {TEMPDIR.."/lj_ffdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
-                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                      action = "$PROG -m ffdef -o $OUTFILE $SOURCES"
-                     }
-local BCDEF   = rule {TEMPDIR.."/lj_bcdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
-                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                      action = "$PROG -m bcdef -o $OUTFILE $SOURCES"
-                     }
-local RECDEF  = rule {TEMPDIR.."/lj_recdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
-                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                      action = "$PROG -m recdef -o $OUTFILE $SOURCES"
-                     }
-local LIBDEF  = rule {TEMPDIR.."/lj_libdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
-                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                      action = "$PROG -m libdef -o $OUTFILE $SOURCES"
-                     }
---]]--
 local FOLDDEF = rule {TEMPDIR.."/lj_folddef.h", base=JIT_SRC_DIR, prog=BUILDVM,
                       src="lj_opt_fold.c", 
                       action = "$PROG -m folddef -o $OUTFILE $SOURCES"
