@@ -48,6 +48,7 @@ local FFDEF  = gendefh {"lj_ffdef.h",  mode="ffdef" }
 local BCDEF  = gendefh {"lj_bcdef.h",  mode="bcdef" }
 local RECDEF = gendefh {"lj_recdef.h", mode="recdef"}
 local LIBDEF = gendefh {"lj_libdef.h", mode="libdef"}
+
 local FOLDDEF = rule {TEMPDIR.."/lj_folddef.h", base=JIT_SRC_DIR, prog=BUILDVM,
                       src="lj_opt_fold.c", 
                       action = "$PROG -m folddef -o $OUTFILE $SOURCES"

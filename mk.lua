@@ -1771,6 +1771,16 @@ do -- [MakeScript Sandbox] =====================================================
       if res ~= nil or type(i) ~= "string" then return res; end;
       return Make.Tools(i); -- try to activate a _loaded_ Tool named i
     end,
+    include = function(filename)
+      filename = fn_forceExt(filename, ".mk");
+      local makefile, err = loadfile (filename, "t", self);
+      if makefile then 
+        if setfenv then setfenv(makefile, self); end; -- lua 5.1
+        makefile();
+      else
+        quitMF("make(): %s", err); 
+      end;
+    end,
     WINDOWS = WINDOWS,
     assert  = assert,
     ENV     = ENV,
@@ -1974,9 +1984,10 @@ do -- [Make] ===================================================================
     --
     if MAKELEVEL == 0 then runMake(); end; -- do the job ...
   end;
+  
   clMake.LUAVERSION = luaVersion();
   --
-  Make       = clMake:singleton();
+  Make = clMake:singleton();
   --
   package.preload["Make"]  = function(...) return Make; end;
   --
