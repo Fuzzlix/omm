@@ -26,11 +26,9 @@ end
 --
 local MINILUA = c99.program {TEMPDIR.."/minilua", src="minilua.c", base=JIT_HOSTDIR, incdir=JIT_SRC_DIR}
 local ARCHH   = rule {TEMPDIR.."/buildvm_arch.h", prog=MINILUA,
-                      action = {"$PROG %s %s -D JIT -D FFI -D FPU -D HFABI -D VER= -D WIN -o $OUTFILE %s", -- command line template
-                                "luaJIT20/dynasm/dynasm.lua",          -- 1st %s
-                                make.get_flag"M32" and "" or "-D P64", -- 2nd %s
-                                "luaJIT20/src/vm_x86.dasc"             -- 3rd %s
-                               }
+                      script="luaJIT20/dynasm/dynasm.lua", dasc="luaJIT20/src/vm_x86.dasc",
+                      flag=make.get_flag"M32" and "" or "-D P64",
+                      action = "$PROG $SCRIPT $FLAG -D JIT -D FFI -D FPU -D HFABI -D VER= -D WIN -o $OUTFILE $DASC", -- command line template
                      }
 local BUILDVM = c99.program {TEMPDIR.."/buildvm", 
                              src="buildvm buildvm_asm buildvm_peobj buildvm_lib buildvm_fold", 
@@ -41,6 +39,16 @@ local BUILDVM = c99.program {TEMPDIR.."/buildvm",
 local LJ_VM   = rule {TEMPDIR.."/lj_vm.o", prog=BUILDVM,
                       action = "$PROG -m peobj -o $OUTFILE"
                      }
+local gendefh = rule.define {TEMPDIR, base=JIT_SRC_DIR, prog=BUILDVM,
+                             src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c \z
+                                  lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
+                             action = "$PROG -m $MODE -o $OUTFILE $SOURCES"
+                            }
+local FFDEF  = gendefh {"lj_ffdef.h",  mode="ffdef" }
+local BCDEF  = gendefh {"lj_bcdef.h",  mode="bcdef" }
+local RECDEF = gendefh {"lj_recdef.h", mode="recdef"}
+local LIBDEF = gendefh {"lj_libdef.h", mode="libdef"}
+--[[--
 local FFDEF   = rule {TEMPDIR.."/lj_ffdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
                       src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
                       action = "$PROG -m ffdef -o $OUTFILE $SOURCES"
@@ -57,14 +65,15 @@ local LIBDEF  = rule {TEMPDIR.."/lj_libdef.h", base=JIT_SRC_DIR, prog=BUILDVM,
                       src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
                       action = "$PROG -m libdef -o $OUTFILE $SOURCES"
                      }
+--]]--
 local FOLDDEF = rule {TEMPDIR.."/lj_folddef.h", base=JIT_SRC_DIR, prog=BUILDVM,
                       src="lj_opt_fold.c", 
                       action = "$PROG -m folddef -o $OUTFILE $SOURCES"
                      }
 local LJDEPS  = group {FFDEF, BCDEF, RECDEF, LIBDEF, FOLDDEF}
 local VMDEF   = rule {TEMPDIR.."/vmdef.lua", base=JIT_SRC_DIR, prog=BUILDVM,
-                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c \z
-                           lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
+                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c \z
+                           lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
                       action = "$PROG -m vmdef -o $OUTFILE $SOURCES"
                      }
 --
