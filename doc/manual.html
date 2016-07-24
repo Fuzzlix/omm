@@ -22,7 +22,7 @@ needed to build the file and relations to files/<em>nodes</em> the <em>node</em>
 <p>The most native way to define a <em>node</em> is the <code>rule</code> tool. To compile a c source to a executable using the
 gnu compiler collection, you may define the following rule in your makefile.</p>
 
-<pre><code>-- example_01.mk
+<pre><code class="lua">-- example_01.mk
 NODE = rule {&quot;hello.exe&quot;, 
              src=&quot;hello.c&quot;, 
              action=&quot;gcc $SOURCES -o $OUTFILE&quot;
@@ -42,7 +42,7 @@ The <code>default()</code> command defines the node, where to start calculating 
 specify optimization options and more. It is usual to provide those compiler switches in a variable or
 parameter named <code>cflags</code>. Those cflags (and some other options) will substitute the <code>$OPTIONS</code> command line variable.</p>
 
-<pre><code>-- example_02.mk
+<pre><code class="lua">-- example_02.mk
 NODE = rule {&quot;hello.exe&quot;, 
              src=&quot;hello.c&quot;, 
              cflags=&quot;-O2 -s&quot;, 
@@ -56,10 +56,10 @@ default(NODE)
 <p>The program to call can also be given by a <code>prog</code> parameter. This parameter can be a string
 containing any valid executable name or a <em>node</em> defined earlier in the makefile.</p>
 
-<pre><code>-- example_03.mk
-local CFLAGS = &quot;-O2 -s&quot;
-local PROG   = &quot;gcc&quot;
-local CMDLN  = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
+<pre><code class="lua">-- example_03.mk
+CFLAGS = &quot;-O2 -s&quot;
+PROG   = &quot;gcc&quot;
+CMDLN  = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
 --
 NODE = rule {&quot;hello.exe&quot;, 
              src=&quot;hello.c&quot;, cflags=CFLAGS, prog=PROG, action=CMDLN}
@@ -79,10 +79,10 @@ a parameter <code>&quot;odir&quot;</code>. The odir parameter in the next exampl
 this path is relative to the makefile location. It is possible to use absolute paths for <code>&quot;odir&quot;</code>.
 All directories needed will be created automatically.</p>
 
-<pre><code>-- example_04.mk
-local CFLAGS = &quot;-O2 -s&quot;
-local PROG   = &quot;gcc&quot;
-local CMDLN  = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
+<pre><code class="lua">-- example_04.mk
+CFLAGS = &quot;-O2 -s&quot;
+PROG   = &quot;gcc&quot;
+CMDLN  = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
 --
 NODE = rule {&quot;hello.exe&quot;, 
              src=&quot;hello.c&quot;, odir=&quot;bin&quot;, cflags=CFLAGS, prog=PROG, action=CMDLN}
@@ -97,10 +97,10 @@ source files given in the src parameter are located.<br/>
 Site note: When writing makefiles, use slashes in paths, even on Windows! Slashes will be automatically
 converted to backslashes for Windows command lines.</p>
 
-<pre><code>-- example_05.mk
-local CFLAGS = &quot;-O2 -s&quot;
-local PROG   = &quot;gcc&quot;
-local CMDLN  = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
+<pre><code class="lua">-- example_05.mk
+CFLAGS = &quot;-O2 -s&quot;
+PROG   = &quot;gcc&quot;
+CMDLN  = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
 --
 NODE = rule {&quot;hello.exe&quot;, 
              src=&quot;hello.c&quot;, odir=&quot;bin&quot;, base=&quot;src&quot;, cflags=CFLAGS, prog=PROG, action=CMDLN}
@@ -116,13 +116,13 @@ The next example compiles the c source to a objectfile and stores the build rule
 we use the <code>&quot;inputs&quot;</code> parameter. Both <code>&quot;src&quot;</code> and <code>&quot;inputs&quot;</code> can be used at the same time and substitute the <code>$SOURCES</code>
 command line variable.</p>
 
-<pre><code>-- example_06.mk
-local CFLAGS     = &quot;-O2 -s&quot;
-local PROG       = &quot;gcc&quot;
-local CMDCOMPILE = &quot;$PROG -c $OPTIONS $SOURCES -o $OUTFILE&quot;
-local CMDLINK    = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
+<pre><code class="lua">-- example_06.mk
+CFLAGS     = &quot;-O2 -s&quot;
+PROG       = &quot;gcc&quot;
+CMDCOMPILE = &quot;$PROG -c $OPTIONS $SOURCES -o $OUTFILE&quot;
+CMDLINK    = &quot;$PROG $OPTIONS $SOURCES -o $OUTFILE&quot;
 --
-NODE_OBJ = rule {&quot;hello.obj&quot;,
+NODE_OBJ = rule {&quot;hello.o&quot;,
                  src=&quot;hello.c&quot;, odir=&quot;tmp&quot;, base=&quot;src&quot;, cflags=CFLAGS, prog=PROG, action=CMDCOMPILE}
 NODE_EXE = rule {&quot;hello.exe&quot;, 
                  inputs=NODE_OBJ, odir=&quot;bin&quot;, cflags=CFLAGS, prog=PROG, action=CMDLINK}
@@ -130,8 +130,28 @@ default(NODE_EXE)
 </code></pre>
 
 <p>As you can imagine, writing makefiles for huge projects in this way results in much writing effort
-and is not comfortable. Therefore the are handy tools ready to allow simpler makefile syntax.
-The next example use the <code>cc</code> <em>tool</em>&#8217;s <code>.group()</code> and <code>.program()</code> <em>actions</em>. The <code>cc</code> <em>tool</em> deals with standard c files.<br/>
+and is not comfortable. Therefore the are handy tools ready to allow simpler makefile syntax. </p>
+
+<p>The forst one is the <code>rule.define()</code> <em>action</em><a href="#fn:1" id="fnref:1" title="see footnote" class="footnote glossary">[1]</a>. This one creates a new <em>action</em> but a <em>node</em><a href="#fn:2" id="fnref:2" title="see footnote" class="footnote glossary">[2]</a>.
+The generated <em>action</em> includes all parameters given to <code>rule.define()</code> as a set of predefined parameter values.
+When using the generated <em>action</em>, the predefined parameters will be taken into account.
+Some template parameters will be used if this parameter is ommittet. (<code>base</code>, <code>odir</code>, <code>ext</code>, <code>type</code>, <code>prog</code>)
+Some template parameters will be used in addition to the given parameters. (<code>defines</code>, <code>cflags</code>, <code>incdir</code>, <code>libdir</code>, <code>libs</code>, <code>needs</code>, <code>from</code>, <code>deps</code>)</p>
+
+<pre><code class="lua">-- example_07.mk
+compile = rule.define {odir=&quot;tmp&quot;, base=&quot;src&quot;, cflags=&quot;-O2&quot;, type=&quot;obj&quot;,
+                       action=&quot;gcc -c $OPTIONS $SOURCES -o $OUTFILE&quot;
+                      }
+link    = rule.define {odir=&quot;bin&quot;, type=&quot;prog&quot;,
+                       action=&quot;gcc $OPTIONS $SOURCES -o $OUTFILE&quot;
+                      }
+NODE_OBJ = compile {&quot;hello.o&quot;, src=&quot;hello.c&quot;}
+NODE_EXE = link {&quot;hello.exe&quot;, inputs=NODE_OBJ}
+</code></pre>
+
+<p><code>rule.create()</code> and <code>rule.define()</code> are very universal and usefull but somehow limited too: One call to rule.create() or calling a generated action generates <strong>one</strong> node for <strong>one</strong> file only. That is the point, where the <code>.group()</code> action of the predefined tools comes handy. <code>.group()</code> generated a list of nodes, including new generated nodes to compile each given source file to a object file.</p>
+
+<p>The next example use the <code>cc</code> <em>tool</em>&#8217;s <code>.group()</code> and <code>.program()</code> <em>actions</em><a href="#fn:1" title="see footnote" class="footnote glossary">[1]</a>. The <code>cc</code> <em>tool</em> deals with standard c files.<br/>
 The <code>.group()</code> <em>action</em> creates a <em>node</em> that compiles all given c sources to object files. The file names for temporary
 object files are generated automatically.
 The <code>.program()</code> <em>action</em> creates a node for a executable to build. It also store additional informations behind the scene,
@@ -140,7 +160,7 @@ will be assumed to be the default targets.)
 All <code>cc</code> <em>actions</em> are os aware and choose file extensions as needed. Our next example will build a <code>&quot;hello.exe&quot;</code> on
 Windows and a <code>&quot;hello&quot;</code> on *nix.</p>
 
-<pre><code>-- example_07.mk
+<pre><code class="lua">-- example_08.mk
 NODE_OBJ = cc.group {src=&quot;hello&quot;, odir=&quot;tmp&quot;, base=&quot;src&quot;}
 NODE_EXE = cc.program {&quot;hello&quot;, inputs=NODE_OBJ, odir=&quot;bin&quot;}
 default(NODE_EXE)
@@ -148,7 +168,7 @@ default(NODE_EXE)
 
 <p>Off cause, with all the knowlege we have now, we can write this simple example shorter:</p>
 
-<pre><code>-- example_08.mk
+<pre><code class="lua">-- example_09.mk
 cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir=&quot;bin&quot;}
 </code></pre>
 
@@ -183,6 +203,11 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 	<td>a list of sourcefiles. The extensions may be omittet if the tool knows the default extensions to look for.</td>
 </tr>
 <tr>
+	<td><strong>ext</strong></td>
+	<td style="text-align:left;"><em>stringlist</em></td>
+	<td>a list of default source file extension e.g: <code>&quot;.c .cpp&quot;</code>.</td>
+</tr>
+<tr>
 	<td><strong>base</strong></td>
 	<td style="text-align:left;"><em>string</em></td>
 	<td>base folder where the sources are stored.</td>
@@ -200,7 +225,7 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 <tr>
 	<td><strong>libdir</strong></td>
 	<td style="text-align:left;"><em>stringlist</em></td>
-	<td>a list of directories where to seach librarys.</td>
+	<td>a list of directories where to seach libraries.</td>
 </tr>
 <tr>
 	<td><strong>libs</strong></td>
@@ -294,6 +319,22 @@ b) one or more <em>MaketreeNode</em>&#8217;s .</dd>
 <dt><em>MaketreeNodes</em></dt>
 <dd>A <em>MaketreeNode</em> or a lua table containing <em>MaketreeNode</em>&#8217;s.</dd>
 </dl>
+
+<div class="footnotes">
+<hr />
+<ol>
+
+<li id="fn:1">
+<span class="glossary name">action </span>: <p>A tool function generating a node or a rule template. <a href="#fnref:1" title="return to article" class="reversefootnote">&#160;&#8617;</a></p>
+</li>
+
+<li id="fn:2">
+<span class="glossary name">node </span>: <p>A data structure describing a file to built. This description includes file name, command line to build the file, nodes the node depends on and needed to be built first, &#8230; <a href="#fnref:2" title="return to article" class="reversefootnote">&#160;&#8617;</a></p>
+</li>
+
+</ol>
+</div>
+
 
 </body>
 </html>
