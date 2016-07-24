@@ -151,6 +151,8 @@ NODE_EXE = link {&quot;hello.exe&quot;, inputs=NODE_OBJ}
 
 <p><code>rule.create()</code> and <code>rule.define()</code> are very universal and usefull but somehow limited too: One call to rule.create() or calling a generated action generates <strong>one</strong> node for <strong>one</strong> file only. That is the point, where the <code>.group()</code> action of the predefined tools comes handy. <code>.group()</code> generated a list of nodes, including new generated nodes to compile each given source file to a object file.</p>
 
+<hr />
+
 <p>The next example use the <code>cc</code> <em>tool</em>&#8217;s <code>.group()</code> and <code>.program()</code> <em>actions</em><a href="#fn:1" title="see footnote" class="footnote glossary">[1]</a>. The <code>cc</code> <em>tool</em> deals with standard c files.<br/>
 The <code>.group()</code> <em>action</em> creates a <em>node</em> that compiles all given c sources to object files. The file names for temporary
 object files are generated automatically.

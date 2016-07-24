@@ -150,6 +150,8 @@ NODE_EXE = link {"hello.exe", inputs=NODE_OBJ}
 ```
 `rule.create()` and `rule.define()` are very universal and usefull but somehow limited too: One call to rule.create() or calling a generated action generates __one__ node for __one__ file only. That is the point, where the `.group()` action of the predefined tools comes handy. `.group()` generated a list of nodes, including new generated nodes to compile each given source file to a object file.
 
+---
+
 The next example use the `cc` _tool_'s `.group()` and `.program()` _actions_[^action]. The `cc` _tool_ deals with standard c files.  
 The `.group()` _action_ creates a _node_ that compiles all given c sources to object files. The file names for temporary 
 object files are generated automatically.
