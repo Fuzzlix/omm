@@ -32,22 +32,22 @@ local ARCHH   = rule {TEMPDIR.."/buildvm_arch.h", prog=MINILUA,
                      }
 local BUILDVM = c99.program {TEMPDIR.."/buildvm", 
                              src="buildvm buildvm_asm buildvm_peobj buildvm_lib buildvm_fold", 
-                             base=JIT_HOSTDIR, incdir={JIT_SRC_DIR, TEMPDIR}, deps = ARCHH,
+                             base=JIT_HOSTDIR, incdir={JIT_SRC_DIR, TEMPDIR}, deps=ARCHH,
                              defines="LJ_ARCH_HASFPU=1 LJ_ABI_SOFTFP=0 LUAJIT_TARGET=LUAJIT_ARCH_"..
                                (make.get_flag"M32" and "x86" or "x64")
                             }
 local LJ_VM   = rule {TEMPDIR.."/lj_vm.o", prog=BUILDVM,
                       action = "$PROG -m peobj -o $OUTFILE"
                      }
-local gendefh = rule.define {TEMPDIR, base=JIT_SRC_DIR, prog=BUILDVM,
+local gendefh = rule.define {base=JIT_SRC_DIR, odir=TEMPDIR, prog=BUILDVM,
                              src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c \z
                                   lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
                              action = "$PROG -m $MODE -o $OUTFILE $SOURCES"
                             }
-local FFDEF  = gendefh {"lj_ffdef.h",  mode="ffdef" }
-local BCDEF  = gendefh {"lj_bcdef.h",  mode="bcdef" }
-local RECDEF = gendefh {"lj_recdef.h", mode="recdef"}
-local LIBDEF = gendefh {"lj_libdef.h", mode="libdef"}
+local FFDEF   = gendefh {"lj_ffdef.h",  mode="ffdef" }
+local BCDEF   = gendefh {"lj_bcdef.h",  mode="bcdef" }
+local RECDEF  = gendefh {"lj_recdef.h", mode="recdef"}
+local LIBDEF  = gendefh {"lj_libdef.h", mode="libdef"}
 
 local FOLDDEF = rule {TEMPDIR.."/lj_folddef.h", base=JIT_SRC_DIR, prog=BUILDVM,
                       src="lj_opt_fold.c", 

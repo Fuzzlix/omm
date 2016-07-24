@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.4-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.5-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -1772,10 +1772,10 @@ do -- [MakeScript Sandbox] =====================================================
       return Make.Tools(i); -- try to activate a _loaded_ Tool named i
     end,
     include = function(filename)
-      filename = fn_forceExt(filename, ".mk");
-      local makefile, err = loadfile (filename, "t", self);
+      filename = fn_defaultExt(filename, ".mki");
+      local makefile, err = loadfile (filename, "t", clMakeScript);
       if makefile then 
-        if setfenv then setfenv(makefile, self); end; -- lua 5.1
+        if setfenv then setfenv(makefile, clMakeScript); end; -- lua 5.1
         makefile();
       else
         quitMF("make(): %s", err); 
@@ -2286,6 +2286,7 @@ do
   end;
   
   clSourceFile.needsBuild = function(self, always_make)
+    dprint(("clSourceFile.needsBuild():               %s"):format(self[1]));
     if self._scanned then return self.dirty, self._mtime; end;
     local dirty, modtime, time = false, -1, self._filetime;
     if self.deps then dirty, modtime = self.deps:needsBuild(always_make); end;
@@ -2949,6 +2950,25 @@ do -- [tools] ==================================================================
     return result;
   end;
   --
+  function clTool:template2param(par)
+    --
+    par.base    = par.base    or (self.__par and self.__par.base);
+    par.odir    = par.odir    or (self.__par and self.__par.odir);
+    par.src     = par.src     or (self.__par and self.__par.src);
+    par.prog    = par.prog    or (self.__par and self.__par.prog);
+    par.type    = par.type    or (self.__par and self.__par.type);
+    par.ext     = par.ext     or (self.__par and self.__par.ext);
+    --
+    --par.defines = par.defines or (self.__par and self.__par.defines);
+    par.cflags  = par.cflags  or (self.__par and self.__par.cflags);
+    --par.incdir  = par.incdir  or (self.__par and self.__par.incdir);
+    --par.libdir  = par.libdir  or (self.__par and self.__par.libdir);
+    --par.libs    = par.libs    or (self.__par and self.__par.libs);
+    --par.needs   = par.needs   or (self.__par and self.__par.needs);
+    --par.from    = par.from    or (self.__par and self.__par.from);
+    --par.deps    = par.deps    or (self.__par and self.__par.deps);
+  end;
+
   function clTool:getSources(par)
     local sources = clTargetList:new();
     sources.cflags        = class.StrList:new();
@@ -2960,282 +2980,150 @@ do -- [tools] ==================================================================
     sources.base          = fn_abs(par.base or ".");
     sources.prerequisites = clTargetList:new();
     sources.tool          = self;
-    if type(self.__par) == "table" then -- include template values
-      local par = self.__par
-      -- src = ...
-      if par.src     then
-        if type(par.src) == "string" then par.src = split(par.src); end;
-        if type(par.src) == "table" then
-          local exts = split(pick(par.ext, self.SRC_EXT, ".*"));
-          for _, n in ipairs(par.src) do
-            local f;
-            local mask = fn_join(par.base, fn_defaultExt(n, exts[1]));
-            local list = fn_files_from_mask(mask);
-            if list then
-              if #list == 0 then quitMF("*ERROR: cant find source file '%s'.", mask); end;
-              for _, n in ipairs(list) do
-                sources:new_sourcefile(n);
-              end;
-            else
-              for _, ext in ipairs(exts) do
-                f = sources:new_sourcefile(par.base, fn_defaultExt(n, ext));
-                if f then break; end;  -- source file found ...
-              end;
-              if not f then
-                quitMF("*ERROR: cant find source file '%s'.", n);
-              end;
+    self:template2param(par);
+    -- src = ...
+    if par.src     then
+      if type(par.src) == "string" then par.src = split(par.src); end;
+      if type(par.src) == "table" then
+        local exts = split(pick(par.ext, self.SRC_EXT, ".*"));
+        for _, n in ipairs(par.src) do
+          local f;
+          local mask = fn_join(par.base, fn_defaultExt(n, exts[1]));
+          local list = fn_files_from_mask(mask);
+          if list then
+            if #list == 0 then quitMF("*ERROR: cant find source file '%s'.", mask); end;
+            for _, n in ipairs(list) do
+              sources:new_sourcefile(n);
+            end;
+          else
+            for _, ext in ipairs(exts) do
+              f = sources:new_sourcefile(par.base, fn_defaultExt(n, ext));
+              if f then break; end;  -- source file found ...
+            end;
+            if not f then
+              quitMF("*ERROR: cant find source file '%s'.", n);
             end;
           end;
         end;
-      end;
-      -- inputs = ...
-      if par.inputs  then
-        if class(par.inputs) then par.inputs = {par.inputs}; end;
-        for _, node in ipairs(par.inputs) do
-          sources:add(node);
-          if node.prerequisites then
-            for pre in node.prerequisites() do
-              if not sources.prerequisites:find(pre[1]) then
-                sources.prerequisites:add(pre);
-              end;
-            end;
-          end;
-          -- TODO: copy more fields?
-        end;
-      end;
-      -- libs = ...
-      if par.libs    then
-        sources.libs:add(par.libs);
-      end;
-      -- cflags = ...
-      if par.cflags  then
-        sources.cflags:add(par.cflags);
-      end;
-      -- needs = ...
-      if par.needs   then
-        if type(par.needs) == "string" then
-          par.needs = split(par.needs);
-        end;
-        for _, ns in ipairs(par.needs) do
-          local n = Needs:find(ns);
-          if not n then quitMF("make(): unknown need '%s'.", ns); end
-          for _, f in ipairs(Needs.fields) do
-            if n[f] then
-              if f == "prerequisites" then
-                for pre in n[f]() do
-                  local tgt = Targets:find(pre);
-                  if tgt then 
-                    for node in tgt.deps() do
-                      if not sources.prerequisites:find(node[1]) then
-                        sources.prerequisites:add(node);
-                      end;
-                    end;
-                  else 
-                    quitMF("no target '%s' defined.", pre); 
-                  end;
-                end;
-              else
-                sources[f]:add(n[f]);
-              end;
-            end;
-          end;
-        end;
-      end;
-      -- defines = ...
-      if par.defines then
-        sources.defines:add(par.defines);
-      end;
-      -- incdir = ...
-      if par.incdir then
-        if type(par.incdir) == "string" then
-          par.incdir = split(par.incdir);
-        end;
-        for _, d in ipairs(par.incdir) do
-          if par.base then 
-            d = fn_join(par.base, d)
-          end;
-          sources.incdir:add(d);
-        end;
-      end;
-      -- deps = ...
-      if par.deps then --TODO
-        if class(par.deps, "GeneratedFile") then
-          sources.prerequisites:add(par.deps)
-        elseif type(par.deps) == "table" then
-          for _, ts in ipairs(par.deps) do
-            if class(ts, "FilesAndTargets") then
-              sources.prerequisites:add(ts);
-            else
-              quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
-            end;
-          end;
-        else
-          quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
-        end;
-      end;
-      -- prerequisites = ...
-      if par.prerequisites then 
-        if type(par.prerequisites) == "string" then
-          par.prerequisites = split(par.prerequisites);
-        end;
-        if type(par.prerequisites) == "table" then
-          for _, ts in ipairs(par.prerequisites) do
-            local t = Targets:find(ts);
-            if not t then quitMF("no target '%s' defined.", ts); end;
-            sources.prerequisites:add(t[1]); --get real need name in case of alias.
-          end;
-        else
-          quitMF("make(): parameter 'prerequisites' needs to be a string or a list of strings."); 
-        end;
-      end;
-      -- from = ...
-      if par.from then
-        sources.from:add(par.from);
+        par.src = nil;
+      else
+        quitMF("invalid parameter `src`."); --TODO
       end;
     end;
-    do -- read parameters
-      -- src = ...
-      if par.src     then
-        if type(par.src) == "string" then par.src = split(par.src); end;
-        if type(par.src) == "table" then
-          local exts = split(pick(par.ext, self.SRC_EXT));
-          for _, n in ipairs(par.src) do
-            local f;
-            local mask = fn_join(par.base, fn_defaultExt(n, exts[1]));
-            local list = fn_files_from_mask(mask);
-            if list then
-              if #list == 0 then quitMF("*ERROR: cant find source file '%s'.", mask); end;
-              for _, n in ipairs(list) do
-                sources:new_sourcefile(n);
-              end;
-            else
-              for _, ext in ipairs(exts) do
-                f = sources:new_sourcefile(par.base, fn_defaultExt(n, ext));
-                if f then break; end;  -- source file found ...
-              end;
-              if not f then
-                quitMF("*ERROR: cant find source file '%s'.", n);
-              end;
-            end;
-          end;
-          par.src = nil;
-        end;
-      end;
-      -- inputs = ...
-      if par.inputs  then
-        if class(par.inputs) then par.inputs = {par.inputs}; end;
-        for _, node in ipairs(par.inputs) do
-          sources:add(node);
-          if node.prerequisites then
-            for pre in node.prerequisites() do
-              if not sources.prerequisites:find(pre[1]) then
-                sources.prerequisites:add(pre);
-              end;
-            end;
-          end;
-          -- TODO: copy more fields?
-        end;
-        par.inputs = nil;
-      end;
-      -- libs = ...
-      if par.libs    then
-        sources.libs:add(par.libs);
-        par.libs = nil;
-      end;
-      if par.cflags  then
-        sources.cflags:add(par.cflags);
-        par.cflags = nil;
-      end;
-      -- needs = ...
-      if par.needs   then
-        if type(par.needs) == "string" then
-          par.needs = split(par.needs);
-        end;
-        for _, ns in ipairs(par.needs) do
-          local n = Needs:find(ns);
-          if not n then quitMF("make(): unknown need '%s'.", ns); end
-          for _, f in ipairs(Needs.fields) do
-            if n[f] then
-              if f == "prerequisites" then
-                for pre in n[f]() do
-                  local tgt = Targets:find(pre);
-                  if tgt then 
-                    for node in tgt.deps() do
-                      if not sources.prerequisites:find(node[1]) then
-                        sources.prerequisites:add(node);
-                      end;
-                    end;
-                  else 
-                    quitMF("no target '%s' defined.", pre); 
-                  end;
-                end;
-              else
-                sources[f]:add(n[f]);
-              end;
+    -- inputs = ...
+    if par.inputs  then
+      if class(par.inputs) then par.inputs = {par.inputs}; end;
+      for _, node in ipairs(par.inputs) do
+        sources:add(node);
+        if node.prerequisites then
+          for pre in node.prerequisites() do
+            if not sources.prerequisites:find(pre[1]) then
+              sources.prerequisites:add(pre);
             end;
           end;
         end;
-        par.needs = nil;
+        -- TODO: copy more fields?
       end;
-      -- defines = ...
-      if par.defines then
-        sources.defines:add(par.defines);
-        par.defines = nil;
-      end;
-      -- incdir = ...
-      if par.incdir then
-        if type(par.incdir) == "string" then
-          par.incdir = split(par.incdir);
-        end;
-        for _, d in ipairs(par.incdir) do
-          if par.base then 
-            d = fn_join(par.base, d)
-          end;
-          sources.incdir:add(d);
-        end;
-        par.incdir = nil;
-      end;
-      -- deps = ...
-      if par.deps then --TODO
-        if class(par.deps, "GeneratedFile") then
-          sources.prerequisites:add(par.deps)
-        elseif type(par.deps) == "table" then
-          for _, ts in ipairs(par.deps) do
-            if class(ts, "FilesAndTargets") then
-              sources.prerequisites:add(ts);
-            else
-              quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
-            end;
-          end;
-        else
-          quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
-        end;
-        par.deps = nil;
-      end;
-      -- prerequisites = ...
-      if par.prerequisites then 
-        if type(par.prerequisites) == "string" then
-          par.prerequisites = split(par.prerequisites);
-        end;
-        if type(par.prerequisites) == "table" then
-          for _, ts in ipairs(par.prerequisites) do
-            local t = Targets:find(ts);
-            if not t then quitMF("no target '%s' defined.", ts); end;
-            sources.prerequisites:add(t[1]); --get real need name in case of alias.
-          end;
-        else
-          quitMF("make(): parameter 'prerequisites' needs to be a string or a list of strings."); 
-        end;
-        par.prerequisites = nil;
-      end;
-      -- from = ...
-      if par.from then
-        sources.from:add(par.from);
-        par.from = nil;
-      end;
-      --
-      par.base = nil;
+      par.inputs = nil;
     end;
+    -- libs = ...
+    if par.libs    then
+      sources.libs:add(par.libs);
+      par.libs = nil;
+    end;
+    if par.cflags  then
+      sources.cflags:add(par.cflags);
+      par.cflags = nil;
+    end;
+    -- needs = ...
+    if par.needs   then
+      if type(par.needs) == "string" then
+        par.needs = split(par.needs);
+      end;
+      for _, ns in ipairs(par.needs) do
+        local n = Needs:find(ns);
+        if not n then quitMF("make(): unknown need '%s'.", ns); end
+        for _, f in ipairs(Needs.fields) do
+          if n[f] then
+            if f == "prerequisites" then
+              for pre in n[f]() do
+                local tgt = Targets:find(pre);
+                if tgt then 
+                  for node in tgt.deps() do
+                    if not sources.prerequisites:find(node[1]) then
+                      sources.prerequisites:add(node);
+                    end;
+                  end;
+                else 
+                  quitMF("no target '%s' defined.", pre); 
+                end;
+              end;
+            else
+              sources[f]:add(n[f]);
+            end;
+          end;
+        end;
+      end;
+      par.needs = nil;
+    end;
+    -- defines = ...
+    if par.defines then
+      sources.defines:add(par.defines);
+      par.defines = nil;
+    end;
+    -- incdir = ...
+    if par.incdir then
+      if type(par.incdir) == "string" then
+        par.incdir = split(par.incdir);
+      end;
+      for _, d in ipairs(par.incdir) do
+        if par.base then 
+          d = fn_join(par.base, d)
+        end;
+        sources.incdir:add(d);
+      end;
+      par.incdir = nil;
+    end;
+    -- deps = ...
+    if par.deps then --TODO
+      if class(par.deps, "GeneratedFile") then
+        sources.prerequisites:add(par.deps)
+      elseif type(par.deps) == "table" then
+        for _, ts in ipairs(par.deps) do
+          if class(ts, "FilesAndTargets") then
+            sources.prerequisites:add(ts);
+          else
+            quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
+          end;
+        end;
+      else
+        quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
+      end;
+      par.deps = nil;
+    end;
+    -- prerequisites = ...
+    if par.prerequisites then 
+      if type(par.prerequisites) == "string" then
+        par.prerequisites = split(par.prerequisites);
+      end;
+      if type(par.prerequisites) == "table" then
+        for _, ts in ipairs(par.prerequisites) do
+          local t = Targets:find(ts);
+          if not t then quitMF("no target '%s' defined.", ts); end;
+          sources.prerequisites:add(t[1]); --get real need name in case of alias.
+        end;
+      else
+        quitMF("make(): parameter 'prerequisites' needs to be a string or a list of strings."); 
+      end;
+      par.prerequisites = nil;
+    end;
+    -- from = ...
+    if par.from then
+      sources.from:add(par.from);
+      par.from = nil;
+    end;
+    --
+    par.base = nil;
     return sources;
   end; -- getSources(par)
 
@@ -3557,7 +3445,9 @@ do -- [tools] ==================================================================
   function Tool:action_create(...)
     local par = self:checkParam(...);
     local src = self:getSources(par);
-    local tgt = Make.Targets:new_generatedfile(par.odir, self.__par and self.__par[1], par[1]);
+    local tgt = Make.Targets:new_generatedfile(par.odir or (self.__par and self.__par.odir),
+                                               self.__par and self.__par[1], 
+                                               par[1]);
     tgt.deps          = src;
     tgt.defines       = src.defines;
     tgt.cflags        = src.cflags;
@@ -3568,6 +3458,7 @@ do -- [tools] ==================================================================
     tgt.from          = src.from;
     tgt.prerequisites = src.prerequisites;
     tgt.tool          = self;
+    par.type = par.type or (self.__par and self.__par.type)
     if par.type then
       if type(par.type) == "string" then
         tgt.type = par.type;
@@ -3632,9 +3523,13 @@ do -- [tools] ==================================================================
   --
   function Tool:action_define(...)
     local par = self:checkParam(...);
+    --parameter checks ...
+    if par[1] then quitMF("rule.define(): field 'outfile name' not allowed in templates."); end;
+    -- TODO: more field checks.
+    --
     local tool = clTool:new{
       toolchain = tc,
-      __par = par, -- TODO: field checks.
+      __par = par,
     };
     tool.__default = function(...)
       return self.action_create(tool, ...);
