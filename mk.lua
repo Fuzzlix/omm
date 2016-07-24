@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.5-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.6-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -2951,22 +2951,59 @@ do -- [tools] ==================================================================
   end;
   --
   function clTool:template2param(par)
+    if not self.__par then return; end;
+    local __par = self.__par;
     --
-    par.base    = par.base    or (self.__par and self.__par.base);
-    par.odir    = par.odir    or (self.__par and self.__par.odir);
-    par.src     = par.src     or (self.__par and self.__par.src);
-    par.prog    = par.prog    or (self.__par and self.__par.prog);
-    par.type    = par.type    or (self.__par and self.__par.type);
-    par.ext     = par.ext     or (self.__par and self.__par.ext);
-    --
-    --par.defines = par.defines or (self.__par and self.__par.defines);
-    par.cflags  = par.cflags  or (self.__par and self.__par.cflags);
-    --par.incdir  = par.incdir  or (self.__par and self.__par.incdir);
-    --par.libdir  = par.libdir  or (self.__par and self.__par.libdir);
-    --par.libs    = par.libs    or (self.__par and self.__par.libs);
-    --par.needs   = par.needs   or (self.__par and self.__par.needs);
-    --par.from    = par.from    or (self.__par and self.__par.from);
-    --par.deps    = par.deps    or (self.__par and self.__par.deps);
+    par.base    = par.base or (self.__par and self.__par.base);
+    par.odir    = par.odir or (self.__par and self.__par.odir);
+    par.prog    = par.prog or (self.__par and self.__par.prog);
+    par.type    = par.type or (self.__par and self.__par.type);
+    par.ext     = par.ext  or (self.__par and self.__par.ext);
+    -- src
+    if __par.src then
+      par.src = class.StrList:new(par.src);
+      par.src:add(__par.src);
+    end;
+    -- defines
+    if __par.defines then
+      par.defines = class.StrList:new(par.defines);
+      par.defines:add(__par.defines);
+    end;
+    -- cflags
+    if __par.cflags then
+      par.cflags = class.StrList:new(par.cflags);
+      par.cflags:add(__par.cflags);
+    end;
+    -- incdir
+    if __par.incdir then
+      par.incdir = class.StrList:new(par.incdir);
+      par.incdir:add(__par.incdir);
+    end;
+    -- libdir
+    if __par.libdir then
+      par.libdir = class.StrList:new(par.libdir);
+      par.libdir:add(__par.libdir);
+    end;
+    -- libs
+    if __par.libs then
+      par.libs = class.StrList:new(par.libs);
+      par.libs:add(__par.libs);
+    end;
+    -- needs
+    if __par.needs then
+      par.needs = class.StrList:new(par.needs);
+      par.needs:add(__par.needs);
+    end;
+    -- from
+    if __par.from then
+      par.from = class.StrList:new(par.from);
+      par.from:add(__par.from);
+    end;
+    --deps
+    if __par.deps then
+      par.deps = clTargetList:new(par.deps);
+      par.deps:add(__par.deps);
+    end;
   end;
 
   function clTool:getSources(par)
@@ -3072,7 +3109,7 @@ do -- [tools] ==================================================================
       par.defines = nil;
     end;
     -- incdir = ...
-    if par.incdir then
+    if par.incdir  then
       if type(par.incdir) == "string" then
         par.incdir = split(par.incdir);
       end;
@@ -3085,7 +3122,7 @@ do -- [tools] ==================================================================
       par.incdir = nil;
     end;
     -- deps = ...
-    if par.deps then --TODO
+    if par.deps    then
       if class(par.deps, "GeneratedFile") then
         sources.prerequisites:add(par.deps)
       elseif type(par.deps) == "table" then
