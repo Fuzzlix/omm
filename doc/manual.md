@@ -49,7 +49,7 @@ default(NODE)
 ---
 
 The program to call can also be given by a `prog` parameter. This parameter can be a string 
-containing any valid executable name or a _node_ defined earlier in the makefile.
+containing any valid executable name or a _node_ defined earlier.
 
 ```lua
 -- example_03.mk
@@ -131,11 +131,11 @@ default(NODE_EXE)
 As you can imagine, writing makefiles for huge projects in this way results in much writing effort 
 and is not comfortable. Therefore the are handy tools ready to allow simpler makefile syntax. 
 
-The forst one is the `rule.define()` _action_[^action]. This one creates a new _action_ but a _node_[^node]. 
+The first one is the `rule.define()` _action_[^action]. This one creates a new _action_ but a _node_[^node]. 
 The generated _action_ includes all parameters given to `rule.define()` as a set of predefined parameter values.
 When using the generated _action_, the predefined parameters will be taken into account. 
 Some template parameters will be used if this parameter is ommittet. (`base`, `odir`, `ext`, `type`, `prog`)
-Some template parameters will be used in addition to the given parameters. (`defines`, `cflags`, `incdir`, `libdir`, `libs`, `needs`, `from`, `deps`)
+Some template parameters will be used in addition to the given parameters. (`src`, `defines`, `cflags`, `incdir`, `libdir`, `libs`, `needs`, `from`, `deps`)
 
 ```lua
 -- example_07.mk
@@ -148,7 +148,7 @@ link    = rule.define {odir="bin", type="prog",
 NODE_OBJ = compile {"hello.o", src="hello.c"}
 NODE_EXE = link {"hello.exe", inputs=NODE_OBJ}
 ```
-`rule.create()` and `rule.define()` are very universal and usefull but somehow limited too: One call to rule.create() or calling a generated action generates __one__ node for __one__ file only. That is the point, where the `.group()` action of the predefined tools comes handy. `.group()` generated a list of nodes, including new generated nodes to compile each given source file to a object file.
+`rule.create()` and `rule.define()` are very universal and usefull but somehow limited too: One call to rule.create() or calling a generated action generates ___one___ node for ___one___ file only. That is the point, where the `.group()` action of the predefined tools comes handy. `.group()` generates a list of nodes, including new generated nodes to compile each given source file to a object file.
 
 ---
 
@@ -211,11 +211,11 @@ example: `base="src"`
 
 _stringlist_ 
 : A collection of string values.  
-a): all values space delimitted in one string e.g.  
+type-a: all values space delimitted in one string e.g.  
 	  `libs="kernel32 user32 gdi32 winspool comdlg32"`  
-b): A lua table containing strings with one value. e.g.  
+type-b: A lua table containing strings with one value. e.g.  
 	  `libs={"kernel32", "user32", "gdi32", "winspool", "comdlg32"}`  
-		Note: A list b) containing lists a) is _not_ allowed.
+		Note: A list type-a containing lists type-b is _not_ allowed.
 
 _MaketreeNode_ 
 : A lua value returned by a _tool_ or _action_ call, containing ..  
@@ -225,8 +225,9 @@ b) one or more _MaketreeNode_'s .
 _MaketreeNodes_ 
 : A _MaketreeNode_ or a lua table containing _MaketreeNode_'s.
 
-[^action]:glossary: action 
+[^action]:glossary: action
 	A tool function generating a node or a rule template.
 
-[^node]:glossary: node 
-	A data structure describing a file to built. This description includes file name, command line to build the file, nodes the node depends on and needed to be built first, ...
+[^node]:glossary: node
+	A data structure describing a file to built. This description includes file name, command line to 
+	build the file, nodes the node depends on and needed to be built first, ...

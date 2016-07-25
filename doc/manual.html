@@ -54,7 +54,7 @@ default(NODE)
 <hr />
 
 <p>The program to call can also be given by a <code>prog</code> parameter. This parameter can be a string
-containing any valid executable name or a <em>node</em> defined earlier in the makefile.</p>
+containing any valid executable name or a <em>node</em> defined earlier.</p>
 
 <pre><code class="lua">-- example_03.mk
 CFLAGS = &quot;-O2 -s&quot;
@@ -132,11 +132,11 @@ default(NODE_EXE)
 <p>As you can imagine, writing makefiles for huge projects in this way results in much writing effort
 and is not comfortable. Therefore the are handy tools ready to allow simpler makefile syntax. </p>
 
-<p>The forst one is the <code>rule.define()</code> <em>action</em><a href="#fn:1" id="fnref:1" title="see footnote" class="footnote glossary">[1]</a>. This one creates a new <em>action</em> but a <em>node</em><a href="#fn:2" id="fnref:2" title="see footnote" class="footnote glossary">[2]</a>.
+<p>The first one is the <code>rule.define()</code> <em>action</em><a href="#fn:1" id="fnref:1" title="see footnote" class="footnote glossary">[1]</a>. This one creates a new <em>action</em> but a <em>node</em><a href="#fn:2" id="fnref:2" title="see footnote" class="footnote glossary">[2]</a>.
 The generated <em>action</em> includes all parameters given to <code>rule.define()</code> as a set of predefined parameter values.
 When using the generated <em>action</em>, the predefined parameters will be taken into account.
 Some template parameters will be used if this parameter is ommittet. (<code>base</code>, <code>odir</code>, <code>ext</code>, <code>type</code>, <code>prog</code>)
-Some template parameters will be used in addition to the given parameters. (<code>defines</code>, <code>cflags</code>, <code>incdir</code>, <code>libdir</code>, <code>libs</code>, <code>needs</code>, <code>from</code>, <code>deps</code>)</p>
+Some template parameters will be used in addition to the given parameters. (<code>src</code>, <code>defines</code>, <code>cflags</code>, <code>incdir</code>, <code>libdir</code>, <code>libs</code>, <code>needs</code>, <code>from</code>, <code>deps</code>)</p>
 
 <pre><code class="lua">-- example_07.mk
 compile = rule.define {odir=&quot;tmp&quot;, base=&quot;src&quot;, cflags=&quot;-O2&quot;, type=&quot;obj&quot;,
@@ -149,7 +149,7 @@ NODE_OBJ = compile {&quot;hello.o&quot;, src=&quot;hello.c&quot;}
 NODE_EXE = link {&quot;hello.exe&quot;, inputs=NODE_OBJ}
 </code></pre>
 
-<p><code>rule.create()</code> and <code>rule.define()</code> are very universal and usefull but somehow limited too: One call to rule.create() or calling a generated action generates <strong>one</strong> node for <strong>one</strong> file only. That is the point, where the <code>.group()</code> action of the predefined tools comes handy. <code>.group()</code> generated a list of nodes, including new generated nodes to compile each given source file to a object file.</p>
+<p><code>rule.create()</code> and <code>rule.define()</code> are very universal and usefull but somehow limited too: One call to rule.create() or calling a generated action generates <strong><em>one</em></strong> node for <strong><em>one</em></strong> file only. That is the point, where the <code>.group()</code> action of the predefined tools comes handy. <code>.group()</code> generates a list of nodes, including new generated nodes to compile each given source file to a object file.</p>
 
 <hr />
 
@@ -307,11 +307,11 @@ example: <code>base=&quot;src&quot;</code></dd>
 
 <dt><em>stringlist</em></dt>
 <dd>A collection of string values.<br/>
-a): all values space delimitted in one string e.g.<br/>
+type-a: all values space delimitted in one string e.g.<br/>
  <code>libs=&quot;kernel32 user32 gdi32 winspool comdlg32&quot;</code><br/>
-b): A lua table containing strings with one value. e.g.<br/>
+type-b: A lua table containing strings with one value. e.g.<br/>
  <code>libs={&quot;kernel32&quot;, &quot;user32&quot;, &quot;gdi32&quot;, &quot;winspool&quot;, &quot;comdlg32&quot;}</code><br/>
- Note: A list b) containing lists a) is <em>not</em> allowed.</dd>
+ Note: A list type-a containing lists type-b is <em>not</em> allowed.</dd>
 
 <dt><em>MaketreeNode</em></dt>
 <dd>A lua value returned by a <em>tool</em> or <em>action</em> call, containing ..<br/>
@@ -327,11 +327,12 @@ b) one or more <em>MaketreeNode</em>&#8217;s .</dd>
 <ol>
 
 <li id="fn:1">
-<span class="glossary name">action </span>: <p>A tool function generating a node or a rule template. <a href="#fnref:1" title="return to article" class="reversefootnote">&#160;&#8617;</a></p>
+<span class="glossary name">action</span>: <p>A tool function generating a node or a rule template. <a href="#fnref:1" title="return to article" class="reversefootnote">&#160;&#8617;</a></p>
 </li>
 
 <li id="fn:2">
-<span class="glossary name">node </span>: <p>A data structure describing a file to built. This description includes file name, command line to build the file, nodes the node depends on and needed to be built first, &#8230; <a href="#fnref:2" title="return to article" class="reversefootnote">&#160;&#8617;</a></p>
+<span class="glossary name">node</span>: <p>A data structure describing a file to built. This description includes file name, command line to
+build the file, nodes the node depends on and needed to be built first, &#8230; <a href="#fnref:2" title="return to article" class="reversefootnote">&#160;&#8617;</a></p>
 </li>
 
 </ol>
