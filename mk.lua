@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.6-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.7-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -985,12 +985,12 @@ do -- [list classes] ===========================================================
   clUList.add      = function(self, item)
     local kf = self.__key or 1;
     if class(item, self.__allowed) then 
-      if not self.__dir[item[kf]] then
-        insert(self, item);
-        self.__dir[item[kf]] = item;
-      else
+      if self.__dir[item[kf]] then
         error(("cant overwrite value '%s'"):format(item[kf]));
         --return nil, self.__dir[item[kf]];
+      else
+        insert(self, item);
+        self.__dir[item[kf]] = item;
       end;
     elseif type(item) == "table" then  
       for _, v in ipairs(item) do 
@@ -1170,8 +1170,12 @@ do
   end;
   
   function fn_forceExt(fname, ext)
-    if #ext > 0 and (ext:sub(1,1) ~= ".") then ext = "." .. ext end;
-    return gsub(fname, "%.[%w_]*$", "") .. ext;
+    if ext then
+      if #ext > 0 and (ext:sub(1,1) ~= ".") then ext = "." .. ext end;
+      return gsub(fname, "%.[%w_]*$", "") .. ext;
+    else
+      return fname;
+    end;
   end;
 
   function fn_splitext(path)
@@ -1785,6 +1789,7 @@ do -- [MakeScript Sandbox] =====================================================
     assert  = assert,
     ENV     = ENV,
     print   = print,
+    io      = roTable(io),
     string  = roTable(string),
     table   = roTable(table),
     quit    = quitMF,
@@ -2748,12 +2753,13 @@ end;
 --
 do -- [tools] ==================================================================
   local clTool, clToolchain, clTools, Tools;
+  local Rule, Group;
   local SearchFieldList = class.StrList:new { -- may be toolchain global fields
     "PROG", "SRC_EXT", "OBJ_EXT", "DLL_EXT", "LIB_EXT", "EXE_EXT",
     "command", "command_slib", "command_dlib", "command_prog", "command_dep",
     "SW_SHARED", "SW_COMPILE", "PROG_slib",
     };
-  local unpack = unpack or table.unpack;
+  --local unpack = unpack or table.unpack;
   --
   clTool = class.Base:subclass{
     __classname = "Tool",
@@ -2950,59 +2956,68 @@ do -- [tools] ==================================================================
     return result;
   end;
   --
+  local stdpars = class.StrList:new "base odir prog type ext action type src cflags incdir libdir libs needs from deps";
   function clTool:template2param(par)
-    if not self.__par then return; end;
     local __par = self.__par;
-    --
-    par.base    = par.base or (self.__par and self.__par.base);
-    par.odir    = par.odir or (self.__par and self.__par.odir);
-    par.prog    = par.prog or (self.__par and self.__par.prog);
-    par.type    = par.type or (self.__par and self.__par.type);
-    par.ext     = par.ext  or (self.__par and self.__par.ext);
-    -- src
-    if __par.src then
-      par.src = class.StrList:new(par.src);
-      par.src:add(__par.src);
-    end;
-    -- defines
-    if __par.defines then
-      par.defines = class.StrList:new(par.defines);
-      par.defines:add(__par.defines);
-    end;
-    -- cflags
-    if __par.cflags then
-      par.cflags = class.StrList:new(par.cflags);
-      par.cflags:add(__par.cflags);
-    end;
-    -- incdir
-    if __par.incdir then
-      par.incdir = class.StrList:new(par.incdir);
-      par.incdir:add(__par.incdir);
-    end;
-    -- libdir
-    if __par.libdir then
-      par.libdir = class.StrList:new(par.libdir);
-      par.libdir:add(__par.libdir);
-    end;
-    -- libs
-    if __par.libs then
-      par.libs = class.StrList:new(par.libs);
-      par.libs:add(__par.libs);
-    end;
-    -- needs
-    if __par.needs then
-      par.needs = class.StrList:new(par.needs);
-      par.needs:add(__par.needs);
-    end;
-    -- from
-    if __par.from then
-      par.from = class.StrList:new(par.from);
-      par.from:add(__par.from);
-    end;
-    --deps
-    if __par.deps then
-      par.deps = clTargetList:new(par.deps);
-      par.deps:add(__par.deps);
+    if __par then
+      par.base   = par.base   or __par.base;
+      par.odir   = par.odir   or __par.odir;
+      par.prog   = par.prog   or __par.prog;
+      par.type   = par.type   or __par.type;
+      par.ext    = par.ext    or __par.ext;
+      par.action = par.action or __par.action;
+      par.type   = par.type   or __par.type;
+      -- src
+      if __par.src then
+        par.src = class.StrList:new(par.src);
+        par.src:add(__par.src);
+      end;
+      -- defines
+      if __par.defines then
+        par.defines = class.StrList:new(par.defines);
+        par.defines:add(__par.defines);
+      end;
+      -- cflags
+      if __par.cflags then
+        par.cflags = class.StrList:new(par.cflags);
+        par.cflags:add(__par.cflags);
+      end;
+      -- incdir
+      if __par.incdir then
+        par.incdir = class.StrList:new(par.incdir);
+        par.incdir:add(__par.incdir);
+      end;
+      -- libdir
+      if __par.libdir then
+        par.libdir = class.StrList:new(par.libdir);
+        par.libdir:add(__par.libdir);
+      end;
+      -- libs
+      if __par.libs then
+        par.libs = class.StrList:new(par.libs);
+        par.libs:add(__par.libs);
+      end;
+      -- needs
+      if __par.needs then
+        par.needs = class.StrList:new(par.needs);
+        par.needs:add(__par.needs);
+      end;
+      -- from
+      if __par.from then
+        par.from = class.StrList:new(par.from);
+        par.from:add(__par.from);
+      end;
+      --deps
+      if __par.deps then
+        par.deps = clTargetList:new(par.deps);
+        par.deps:add(__par.deps);
+      end;
+      -- all other params
+      for n, v in pairs(__par) do
+        if not stdpars.__dir[n] then
+          par[n] = par[n] or v;
+        end;
+      end;
     end;
   end;
 
@@ -3017,7 +3032,6 @@ do -- [tools] ==================================================================
     sources.base          = fn_abs(par.base or ".");
     sources.prerequisites = clTargetList:new();
     sources.tool          = self;
-    self:template2param(par);
     -- src = ...
     if par.src     then
       if type(par.src) == "string" then par.src = split(par.src); end;
@@ -3172,11 +3186,11 @@ do -- [tools] ==================================================================
     if type(par) ~= "table" then 
       quitMF("%s(): parameter needs to be a table. Did you use {}?", self[1]); 
     end;
+    self:template2param(par);
     return par;
   end;
   
-  function clTool:checkFileNameParam(...)
-    local par = select(1, ...);
+  function clTool:checkFileNameParam(par)
     if type(par[1]) ~= "string" then quitMF("%s(): no valid file name at index [1].", self[1]); end;
     return par[1];
   end;
@@ -3453,11 +3467,11 @@ do -- [tools] ==================================================================
   
   Tool:add_action("copy");
   --
-  Tool = tc:new_tool{"group";
+  Group = tc:new_tool{"group";
     SRC_EXT = ".*";
   };
   
-  function Tool:action_group(...)
+  function Group:action_group(...)
     local par = self:checkParam(...);
     if not par.inputs then
       local inputs = {};
@@ -3472,93 +3486,108 @@ do -- [tools] ==================================================================
     return res;
   end;
   
-  Tool:add_group();
+  Group:add_group();
   --
-  Tool = tc:new_tool{"rule";
-    SRC_EXT = ".*";
+  Rule = tc:new_tool{"rule";
   };
   
   --
-  function Tool:action_create(...)
+  function Rule:action_create(...)
     local par = self:checkParam(...);
-    local src = self:getSources(par);
-    local tgt = Make.Targets:new_generatedfile(par.odir or (self.__par and self.__par.odir),
-                                               self.__par and self.__par[1], 
-                                               par[1]);
-    tgt.deps          = src;
-    tgt.defines       = src.defines;
-    tgt.cflags        = src.cflags;
-    tgt.incdir        = src.incdir;
-    tgt.libdir        = src.libdir;
-    tgt.libs          = src.libs;
-    tgt.needs         = src.needs;
-    tgt.from          = src.from;
-    tgt.prerequisites = src.prerequisites;
-    tgt.tool          = self;
-    par.type = par.type or (self.__par and self.__par.type)
-    if par.type then
-      if type(par.type) == "string" then
-        tgt.type = par.type;
-        par.type = nil;
-      else
-        quitMF("target(): parameter 'type' needs to be a string.")
-      end;
-    end;
-    par[1] = nil;
-    par.odir = nil;
     --
-    par.action = par.action or self.__par.action;
-    if not par.action    then quitMF("rule(): no action given."); end;
-    if class(par.action) then quitMF("rule(): action needs to be a string or list of strings/nodes."); end;
-    if type(par.action) == "table" then
-      for i, s in ipairs(par.action) do
-        if class(s, "File") then par.action[i] = fn_canonical(s[1]); end;
-      end;
-      par.action = par.action[1]:format(unpack(par.action, 2));
-    end;
-    if type(par.action) == "string" then
-      tgt.action = par.action;
-      par.action = nil;
-    else
-      quitMF("rule(): action needs to be a string or list of strings/nodes.");
-    end;
-    --
-    par.prog = par.prog or self.__par.prog;
+    par.type = par.type or "obj";
     if par.prog then
       local prog = par.prog;
       if type(prog) == "string" then
         par.prog = nil;
       elseif class(prog, "File") then
-        tgt.prerequisites:add(prog)
+        par.deps = clTargetList:new(par.deps);
+        par.deps:add(prog)
         prog = par.prog[1];
         par.prog = nil;
       else
         quitMF("rule(): invalid parameter 'prog'.");
       end;
       prog = fn_canonical(prog);
-      if tgt.action:find("$PROG%f[%U]") then
-        tgt.action = tgt.action:gsub("$PROG", prog);
+      if par.action:find("$PROG%f[%U]") then
+        par.action = par.action:gsub("$PROG", prog);
       else
         quitMF("rule(): no field '$PROG' in 'action' found.");
       end;
     end;
     --
-    local processed = {};
-    for n, v in pairs(par) do
-      if tgt.action:find("$"..string.upper(n)) then
-        tgt.action = tgt.action:gsub("$"..string.upper(n).."%f[%U]", v);
-        insert(processed, n);
+    local src = self:getSources(par);
+    local processed = class.StrList:new();
+    if not par.action then quitMF("rule(): no action given."); end;
+    if type(par.action) ~= "string" then quitMF("rule(): action needs to be a string."); end;
+    --
+    local result;
+    if par.action:find("$SOURCE%f[%U]") then -- one node for each source
+      par.action = par.action:gsub("$SOURCE%f[%U]", "$SOURCES");
+      result = clTargetList:new();
+      for sf in src() do
+        local fn = fn_forceExt(fn_basename(sf[1]), par.outext or self.OBJ_EXT or self.toolchain.OBJ_EXT);
+        if type(par[1]) == "string" then fn = par[1] .. "_" .. fn; end;
+        local of = result:new_generatedfile(par.odir, fn);
+        of.prerequisites = src.prerequisites;
+        of.deps          = sf;
+        of.defines       = src.defines;
+        of.cflags        = src.cflags;
+        of.incdir        = src.incdir;
+        of.libdir        = src.libdir;
+        of.libs          = src.libs;
+        of.needs         = src.needs;
+        of.from          = src.from;
+        of.tool          = self;
+        of.type          = par.type;
+        of.base          = src.base;
+        of.type          = par.type;
+        of.prerequisites = src.prerequisites;
+        of.action        = par.action;
+        for n, v in pairs(par) do
+          if of.action:find("$"..string.upper(n)) then
+            of.action = of.action:gsub("$"..string.upper(n).."%f[%U]", v);
+            processed:add(n);
+          end;
+        end;
+      end;
+    else
+      result = Make.Targets:new_generatedfile(par.odir, par[1]);
+      result.deps          = src;
+      result.defines       = src.defines;
+      result.cflags        = src.cflags;
+      result.incdir        = src.incdir;
+      result.libdir        = src.libdir;
+      result.libs          = src.libs;
+      result.needs         = src.needs;
+      result.from          = src.from;
+      result.tool          = self;
+      result.type          = par.type;
+      result.prerequisites = src.prerequisites;
+      result.action        = par.action;
+      for n, v in pairs(par) do
+        if result.action:find("$"..string.upper(n)) then
+          result.action = result.action:gsub("$"..string.upper(n).."%f[%U]", v);
+          processed:add(n);
+        end;
       end;
     end;
-    for _, n in ipairs(processed) do par[n] = nil; end; -- clear processed params
+    --
+    par[1]     = nil;
+    par.odir   = nil;
+    par.type   = nil;
+    par.outext = nil;
+    par.action = nil;
+    --
+    for n in processed() do par[n] = nil; end; -- clear processed params
     --
     self:allParamsEaten(par);
-    return tgt;
+    return result;
   end;
   
-  Tool:add_action("create");
+  Rule:add_action("create");
   --
-  function Tool:action_define(...)
+  function Rule:action_define(...)
     local par = self:checkParam(...);
     --parameter checks ...
     if par[1] then quitMF("rule.define(): field 'outfile name' not allowed in templates."); end;
@@ -3574,7 +3603,7 @@ do -- [tools] ==================================================================
     return tool;
   end;
   
-  Tool:add_action("define");
+  Rule:add_action("define");
   --
 end;
 --
