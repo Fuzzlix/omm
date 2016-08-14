@@ -198,10 +198,11 @@ cc.program {"hello", src="hello", base="src", odir="bin"}
 
 ### aditional parameters unterstood by rule:
 
-| name        | type              | description                                                |
-|-------------|:------------------|------------------------------------------------------------|
+| name        | type                        | description                                                |
+| ----------- | --------------------------- | ---------------------------------------------------------- |
 | __prog__    | _string_ or _MaketreeNode_  | executable to be used in this rule.                        |
-| __type__    | _string_          | type of the generated file. default: none. `"obj"`, `"slib"`, `"dlib"` and `"prog"` are predefined types used by all tools and can be used with care. |
+| __type__    | _string_                    | type of the generated file. default: none. `"obj"`, `"slib"`, `"dlib"` and `"prog"` are predefined types used by all tools and can be used with care. |
+| __outext__  | _string_                    | extension to use for generated files                       |
 
 ### Parameter types:
 
@@ -215,7 +216,7 @@ type-a: all values space delimitted in one string e.g.
 	  `libs="kernel32 user32 gdi32 winspool comdlg32"`  
 type-b: A lua table containing strings with one value. e.g.  
 	  `libs={"kernel32", "user32", "gdi32", "winspool", "comdlg32"}`  
-		Note: A list type-a containing lists type-b is _not_ allowed.
+		Note: A list type-b containing lists type-a is _not_ allowed.
 
 _MaketreeNode_ 
 : A lua value returned by a _tool_ or _action_ call, containing ..  
@@ -224,6 +225,16 @@ b) one or more _MaketreeNode_'s .
 
 _MaketreeNodes_ 
 : A _MaketreeNode_ or a lua table containing _MaketreeNode_'s.
+
+### rule(): action variables:
+
+- `$PROG`: program to execute. (should be the very 1st variable in the action string.)
+- `$SOURCES`: will be substituted by _all_ filenames given by `src` and `inputs`.
+- `$SOURCE`:  will be substituted by _one_ filename given by `src` and `inputs`.  
+  `rule()` will generate as many nodes as sources are given and return a nodelist instead a single node.
+- `$OUTFILE`: generated name for the file to build.
+- `$*`: all other variables starting with "$" and continuing with upper case letters can be freely used and will be substituded 
+  by the value of the coresponding lower letter parameter. (eg. `$SOMETHING` will be substituded by the parameter value of `something`.)
 
 [^action]:glossary: action
 	A tool function generating a node or a rule template.

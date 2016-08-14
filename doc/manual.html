@@ -272,14 +272,14 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 <table>
 <colgroup>
 <col/>
-<col style="text-align:left;"/>
+<col/>
 <col/>
 </colgroup>
 
 <thead>
 <tr>
 	<th>name</th>
-	<th style="text-align:left;">type</th>
+	<th>type</th>
 	<th>description</th>
 </tr>
 </thead>
@@ -287,13 +287,18 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 <tbody>
 <tr>
 	<td><strong>prog</strong></td>
-	<td style="text-align:left;"><em>string</em> or <em>MaketreeNode</em></td>
+	<td><em>string</em> or <em>MaketreeNode</em></td>
 	<td>executable to be used in this rule.</td>
 </tr>
 <tr>
 	<td><strong>type</strong></td>
-	<td style="text-align:left;"><em>string</em></td>
+	<td><em>string</em></td>
 	<td>type of the generated file. default: none. <code>&quot;obj&quot;</code>, <code>&quot;slib&quot;</code>, <code>&quot;dlib&quot;</code> and <code>&quot;prog&quot;</code> are predefined types used by all tools and can be used with care.</td>
+</tr>
+<tr>
+	<td><strong>outext</strong></td>
+	<td><em>string</em></td>
+	<td>extension to use for generated files</td>
 </tr>
 </tbody>
 </table>
@@ -311,7 +316,7 @@ type-a: all values space delimitted in one string e.g.<br/>
  <code>libs=&quot;kernel32 user32 gdi32 winspool comdlg32&quot;</code><br/>
 type-b: A lua table containing strings with one value. e.g.<br/>
  <code>libs={&quot;kernel32&quot;, &quot;user32&quot;, &quot;gdi32&quot;, &quot;winspool&quot;, &quot;comdlg32&quot;}</code><br/>
- Note: A list type-a containing lists type-b is <em>not</em> allowed.</dd>
+ Note: A list type-b containing lists type-a is <em>not</em> allowed.</dd>
 
 <dt><em>MaketreeNode</em></dt>
 <dd>A lua value returned by a <em>tool</em> or <em>action</em> call, containing ..<br/>
@@ -321,6 +326,18 @@ b) one or more <em>MaketreeNode</em>&#8217;s .</dd>
 <dt><em>MaketreeNodes</em></dt>
 <dd>A <em>MaketreeNode</em> or a lua table containing <em>MaketreeNode</em>&#8217;s.</dd>
 </dl>
+
+<h3 id="rule:actionvariables:">rule(): action variables:</h3>
+
+<ul>
+<li><code>$PROG</code>: program to execute. (should be the very 1st variable in the action string.)</li>
+<li><code>$SOURCES</code>: will be substituted by <em>all</em> filenames given by <code>src</code> and <code>inputs</code>.</li>
+<li><code>$SOURCE</code>: will be substituted by <em>one</em> filename given by <code>src</code> and <code>inputs</code>.<br/>
+ <code>rule()</code> will generate as many nodes as sources are given and return a nodelist instead a single node.</li>
+<li><code>$OUTFILE</code>: generated name for the file to build.</li>
+<li><code>$*</code>: all other variables starting with &#8220;$&#8221; and continuing with upper case letters can be freely used and will be substituded
+ by the value of the coresponding lower letter parameter. (eg. <code>$SOMETHING</code> will be substituded by the parameter value of <code>something</code>.)</li>
+</ul>
 
 <div class="footnotes">
 <hr />
