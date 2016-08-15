@@ -14,6 +14,7 @@ make "iup"
 local LUAVER  = make.Needs"lua".LUAVERSION
 local TEMPDIR = TEMPDIR.."/"..LUAVER
 
+include "luastrip" -- load strip function.
 local function bin2c(par)
   local function msg(s, ...) return ("lua2c(): "..s):format(...); end;
   --
@@ -57,13 +58,10 @@ if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
   local CTRLC    = addprefix("elem/il_", addsuffix( ".c",   CTRL))
   local SRCLUA   = addprefix("elem/",    addsuffix( ".lua", CTRL)).. " " .. "iuplua.lua constants.lua iup_config.lua" 
   
-  --local STRPLUA  = rule {base=SRCDIR, odir=TEMPDIR, prog="lstrip.lua", src=SRCLUA, 
-  --                       action = "$PROG $SOURCE $OUTFILE"
-  --                      }
-  --local CTRLH    = rule {base=SRCDIR, odir=TEMPDIR, prog=SRCDIR.."/bin2c.lua", inputs=STRPLUA, outext=".lh",
-  --                       action = "$PROG $SOURCE > $OUTFILE"
-  --                      }
-  local CTRLH    = rule {base=SRCDIR, odir=TEMPDIR, func=bin2c, src=SRCLUA, outext=".lh", -- inputs=STRPLUA,
+  local STRPLUA  = rule {base=SRCDIR, odir=TEMPDIR, func=luastrip, src=SRCLUA, 
+                         action = "lstrip $SOURCE $OUTFILE"
+                        }
+  local CTRLH    = rule {base=SRCDIR, odir=TEMPDIR, func=bin2c, outext=".lh", inputs=STRPLUA,
                          action = "lua2c $SOURCE $OUTFILE" -- dummy commandline for console output.
                         }
   local SRC      = "iuplua.c iuplua_api.c iuplua_draw.c iuplua_tree_aux.c iuplua_scanf.c \z

@@ -1,0 +1,146 @@
+-- Required Modules: lpeg
+
+if luastrip == nil then
+  local PARSER;
+  local lpeg_found, lpeg = pcall(require, "lpeg");
+  if lpeg_found then
+    lpeg.setmaxstack(200);       -- default: 100
+    local C, Cb, Cg, Cs, Cmt = lpeg.C, lpeg.Cb, lpeg.Cg, lpeg.Cs, lpeg.Cmt;
+    local locale   = lpeg.locale();
+    local P, S, V  = lpeg.P, lpeg.S, lpeg.V;
+    local ANY      = P(1);
+    local EOL      = P"\n";
+    local BOF      = lpeg.P(function(_, i) return (i == 1) and i end);
+    local EOF      = P(-1);
+    local SPACE    = locale.space;
+    local DIGIT    = locale.digit;
+    local ALPHA    = locale.alpha + P"_";
+    local ALPHANUM = ALPHA + DIGIT;
+    local SHEBANG  = BOF * P"#" * (ANY - EOL)^0 * EOL;
+    local function K(w) 
+      return P(w) * -ALPHANUM; 
+    end;
+    PARSER = Cs{
+      "chunk";
+      spc = (SPACE + V"comment")^0 / "",
+      space = ((SPACE + V"comment")^1 / " ")^0,
+      longstring = (P"[" * Cg((P"=")^0, "init") * P"[") *            
+                   (ANY - (Cmt((P"]" * C((P"=")^0) * "]") * Cb"init",
+                               function (s,i,a,b) return a == b end)))^0 *
+                   (P"]" * (P"=")^0 * P"]"),
+      comment = (P"--" * V"longstring") +
+                (P"--" * (ANY - EOL)^0),
+      Name = ALPHA * ALPHANUM^0 - ( 
+                 K"and" + K"break" + K"do" + K"else" + K"elseif" +
+                 K"end" + K"false" + K"for" + K"function" + K"goto" + K"if" +
+                 K"in" + K"local" + K"nil" + K"not" + K"or" + K"repeat" +
+                 K"return" + K"then" + K"true" + K"until" + K"while"),
+      Number = (P"-")^-1 * V"spc" * P"0x" * locale.xdigit^1 * -ALPHANUM +
+               (P"-")^-1 * V"spc" * DIGIT^1 *
+                   (P "." * DIGIT^1)^-1 * (S "eE" * (P "-")^-1 *
+                       DIGIT^1)^-1 * -ALPHANUM +
+               (P"-")^-1 * V "spc" * P "." * DIGIT^1 *
+                   (S "eE" * (P "-")^-1 * DIGIT^1)^-1 * -ALPHANUM,
+      String = P'"' * (P"\\" * ANY + (1 - P'"'))^0 * P'"' +
+               P"'" * (P"\\" * ANY + (1 - P"'"))^0 * P"'" +
+               V"longstring",
+      chunk = ((SHEBANG)^-1 / "") * V"spc" * V"block" * V"spc" * EOF,
+      block = (V"stat" * ((V"spc" * P";" * V"spc") + V"space"))^0,
+      stat = P";" * V"spc" +
+             P"::" * V"spc" * V"Name" * V"spc" * P"::" +
+             K"break" +
+             K"goto" * V"space" * V"Name" +
+             K"do" * V"space" * V"block" * V"space" * K "end" +
+             K"while" * V"space" * V"expr" * V"space" * K "do" * V"space" *
+                 V"block" * V"space" * K"end" +
+             K"repeat" * V"space" * V"block" * V"space" * K"until" *
+                 V"space" * V"expr" +
+             K"if" * V"space" * V"expr" * V"space" * K"then" *
+                 V"space" * V"block" * V"space" *
+                 (K"elseif" * V"space" * V"expr" * V"space" * K"then" *
+                  V"space" * V"block" * V"space")^0 *
+                 (K"else" * V"space" * V"block" * V"space")^-1 * K"end" +
+             K"for" * V"space" *
+                 ((V"Name" * V"spc" * P"=" * V"spc" *
+                   V"expr" * V"spc" * P"," * V"spc" * V"expr" *
+                   (V"spc" * P"," * V"spc" * V"expr")^-1) +
+                  (V"namelist" * V"space" * K"in" * V"space" * V"explist")
+                 )* V"space" * K"do" * V"space" * V"block" * V"space" * K"end" +
+             K"return" * (V"space" * V"explist")^-1 +
+             K"function" * V"space" * V"funcname" * V"spc" *  V"funcbody" +
+             K"local" * V"space" * (
+               (K"function" * V"space" * V"Name" * V"spc" * V"funcbody") +
+               (V"namelist" * (V"spc" * P"=" * V"spc" * V"explist")^-1)) +
+             V"varlist" * V"spc" * P"=" * V"spc" * V"explist" +
+             V"functioncall",
+      funcname = V"Name" * (V"spc" * P"." * V"spc" * V"Name")^0 *
+                    (V"spc" * P":" * V"spc" * V"Name")^-1,
+      namelist = V"Name" * (V"spc" * P"," * V"spc" * V"Name")^0,
+      varlist = V"var" * (V"spc" * P"," * V"spc" * V"var")^0,
+      value = K"nil" + K"false" + K"true" + P"..." +
+              V"Number" + V"String" * V"spc" +
+              V"functiondef" + V"tableconstructor" +
+              V"functioncall" + V"var" +
+              P"(" * V"spc" * V"expr" * V"spc" * P")" * V"spc",
+      expr = V"unop" * V"spc" * V"expr" +
+             V"value" * (V"binop" * V"expr")^-1,
+      index = P"[" * V"spc" * V"expr" * V"spc" * P"]" +
+              P"." * V"spc" * V"Name",
+      call = V"args" +
+             P":" * V"spc" * V"Name" * V"spc" * V"args",
+      prefix = P"(" * V"spc" * V"expr" * V"spc" * P")" +
+               V"Name",
+      suffix = V"call" + V"index",
+      var = V"prefix" * (V"spc" * V"suffix" * #(V"spc" * V"suffix"))^0 * V"spc" * V"index" +
+            V"Name",
+      functioncall = V"prefix" * (V"spc" * V"suffix" * #(V"spc" * V"suffix"))^0 * V"spc" * V"call",
+      explist = V"expr" * (V"spc" * P"," * V"spc" * V"expr")^0,
+      args = P"(" * V"spc" * (V"explist" * V"spc")^-1 * P")" +
+             V"tableconstructor" +
+             V"String",
+      functiondef = K"function" * V"spc" * V"funcbody",
+      funcbody = P"(" * V"spc" * (V"parlist" * V"spc")^-1 * P")" * V"spc" *  V"block" * V"space" * K"end",
+      parlist = V"namelist" * (V"spc" * P"," * V"spc" * P"...")^-1 +
+                P"...",
+      tableconstructor = P"{" * V"spc" * (V"fieldlist" * V"spc")^-1 * P"}",
+      fieldlist = V"field" * (V"spc" * V"fieldsep" * V"spc" * V"field")^0 * (V"spc" * V"fieldsep")^-1,
+      field = V"spc" * P"[" * V"spc" *V"expr" * V"spc" * P"]" * V"spc" * P"=" * V"spc" * V"expr"
+              + V"space" * V"Name" * V"spc" * P"=" * V"spc" * V"expr" 
+              + V"expr",
+      fieldsep = V"spc" * (P"," + P ";") * V"spc",
+      binop = V"space" * (K"and" + K"or") * V"space" +
+              V"spc" * (P".." + P"<=" + P">=" + P"==" + P"~="
+                        + P"//" + P">>" + P"<<" + P"~"
+                        + P"|" + P"+" + P"-" + P"*" + P"/"
+                        + P"^" + P"%" + P"&" + P"<" + P">" ) * V"spc",
+      unop  = V"space" *K"not" * V"space" +
+              V"spc" * (P"-" + P"~" + P"#") * V"spc",
+    };
+  end;
+  --
+  function luastrip(par)
+    --
+    local function msg(s, ...) return ("luastrip(): "..s):format(...); end;
+    local source;
+    --
+    -- read main source
+    local ifile = io.open(par.source);
+    if not ifile then return nil, msg("cant open '%s'.", par.source); end;
+    source = ifile:read("*a");
+    ifile:close();
+    -- strip lua source
+    if lpeg_found then 
+      source = PARSER:match(source); 
+      if not source then return nil, msg("syntax error in file '%s'.", par.source); end;
+    end;
+    -- write outfile
+    local ofile = io.open(par.outfile, "w+");
+    if not ofile then return nil, msg("cant open '$s'.", par.outfile); end;
+    if ofile:write(source) then
+      ofile:close();
+      return true;
+    end;
+    of:close();
+    return nil, msg("cant write to '%s'.", par.outfile); 
+  end;
+end;
