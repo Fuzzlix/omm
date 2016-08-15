@@ -199,8 +199,9 @@ cc.program {"hello", src="hello", base="src", odir="bin"}
 ### aditional parameters unterstood by rule:
 
 | name        | type                        | description                                                |
-| ----------- | --------------------------- | ---------------------------------------------------------- |
+| ----------- | :-------------------------- | ---------------------------------------------------------- |
 | __prog__    | _string_ or _MaketreeNode_  | executable to be used in this rule.                        |
+| __func__    | _lua function_              | a lua function that creates the outfile from the source(s). When defining a `func` parameter, the `action` parameter is used for display output only but executing a command line. It is suggested, to write a descriptive dummy program name at the beginning of the action line.|
 | __type__    | _string_                    | type of the generated file. default: none. `"obj"`, `"slib"`, `"dlib"` and `"prog"` are predefined types used by all tools and can be used with care. |
 | __outext__  | _string_                    | extension to use for generated files                       |
 
@@ -225,6 +226,11 @@ b) one or more _MaketreeNode_'s .
 
 _MaketreeNodes_ 
 : A _MaketreeNode_ or a lua table containing _MaketreeNode_'s.
+
+_lua function_
+: A lua function recieving one table containing all parameters listed in the action line.  
+This function should return `true` on success and `false,message` otherwise.  
+The parameter table contains all fields mentioned in the `action` parameter plus the fully substituded action line.
 
 ### rule(): action variables:
 

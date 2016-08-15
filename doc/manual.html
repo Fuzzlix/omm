@@ -272,14 +272,14 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 <table>
 <colgroup>
 <col/>
-<col/>
+<col style="text-align:left;"/>
 <col/>
 </colgroup>
 
 <thead>
 <tr>
 	<th>name</th>
-	<th>type</th>
+	<th style="text-align:left;">type</th>
 	<th>description</th>
 </tr>
 </thead>
@@ -287,17 +287,22 @@ cc.program {&quot;hello&quot;, src=&quot;hello&quot;, base=&quot;src&quot;, odir
 <tbody>
 <tr>
 	<td><strong>prog</strong></td>
-	<td><em>string</em> or <em>MaketreeNode</em></td>
+	<td style="text-align:left;"><em>string</em> or <em>MaketreeNode</em></td>
 	<td>executable to be used in this rule.</td>
 </tr>
 <tr>
+	<td><strong>func</strong></td>
+	<td style="text-align:left;"><em>lua function</em></td>
+	<td>a lua function that creates the outfile from the source(s). When defining a <code>func</code> parameter, the <code>action</code> parameter is used for display output only but executing a command line. It is suggested, to write a descriptive dummy program name at the beginning of the action line.</td>
+</tr>
+<tr>
 	<td><strong>type</strong></td>
-	<td><em>string</em></td>
+	<td style="text-align:left;"><em>string</em></td>
 	<td>type of the generated file. default: none. <code>&quot;obj&quot;</code>, <code>&quot;slib&quot;</code>, <code>&quot;dlib&quot;</code> and <code>&quot;prog&quot;</code> are predefined types used by all tools and can be used with care.</td>
 </tr>
 <tr>
 	<td><strong>outext</strong></td>
-	<td><em>string</em></td>
+	<td style="text-align:left;"><em>string</em></td>
 	<td>extension to use for generated files</td>
 </tr>
 </tbody>
@@ -325,6 +330,11 @@ b) one or more <em>MaketreeNode</em>&#8217;s .</dd>
 
 <dt><em>MaketreeNodes</em></dt>
 <dd>A <em>MaketreeNode</em> or a lua table containing <em>MaketreeNode</em>&#8217;s.</dd>
+
+<dt><em>lua function</em></dt>
+<dd>A lua function recieving one table containing all parameters listed in the action line.<br/>
+This function should return <code>true</code> on success and <code>false,message</code> otherwise.<br/>
+The parameter table contains all fields mentioned in the <code>action</code> parameter plus the fully substituded action line.</dd>
 </dl>
 
 <h3 id="rule:actionvariables:">rule(): action variables:</h3>
