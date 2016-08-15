@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.7-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.8-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -2293,12 +2293,12 @@ do
   clSourceFile.needsBuild = function(self, always_make)
     dprint(("clSourceFile.needsBuild():               %s"):format(self[1]));
     if self._scanned then return self.dirty, self._mtime; end;
-    local dirty, modtime, time = false, -1, self._filetime;
+    local dirty, modtime, time = false, -1, self:filetime();
     if self.deps then dirty, modtime = self.deps:needsBuild(always_make); end;
     self.dirty = self.dirty or dirty or always_make;
     self._scanned = true;
     self._mtime = max(time, modtime)
-    --dprint(("clSourceFile.needsBuild():         %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
+    dprint(("clSourceFile.needsBuild():         %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, self._mtime;
   end;
   --
@@ -2316,7 +2316,7 @@ do
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
       quit("make(): file '%s' does not exist.", self[1], 0); 
     end;
-    --dprint(("clGeneratedFile.needsBuild():            %s =>"):format(self[1]));
+    dprint(("clGeneratedFile.needsBuild():            %s =>"):format(self[1]));
     local time    = self:filetime() or -1;
     local dirty   = time == -1;
     local modtime = -1;
@@ -2338,7 +2338,7 @@ do
     end;
     self._scanned = true;
     self._mtime = max(time, modtime)
-    --dprint(("clGeneratedFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
+    dprint(("clGeneratedFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, self._mtime;
   end;
   
@@ -2424,6 +2424,14 @@ do
     local item = clTarget:new(...);
     self:add(item);
     return item;
+  end;
+  
+  clTargetList.canonical         = function(self, ...)
+    local res = {};
+    for f in self() do
+      insert(res, f:canonical());
+    end;
+    return concat(res," ");
   end;
   
   clTargetList.delete            = function(self, ...)
@@ -2709,21 +2717,32 @@ do -- [make pass 2 + 3] ========================================================
               end;
               if node.command then
                 fn_ensurePath(fn_splitpath(node[1]));
-                job_execute(node.command, 
-                  function(ok, code, inf)
-                    if verbose or not ok then
-                      for l in inf:lines() do
-                        print(l);
+                if node.func then
+                  local ok, msg = node.func();
+                  if not ok and msg then print(msg); end;
+                  if not ok and strict then --abort ...
+                    jobs_clear();
+                    os.exit(code);
+                  end;
+                  node.done = true;
+                  node.dirty = nil;
+                else
+                  job_execute(node.command, 
+                    function(ok, code, inf)
+                      if verbose or not ok then
+                        for l in inf:lines() do
+                          print(l);
+                        end;
                       end;
-                    end;
-                    if not ok and strict then --abort ...
-                      jobs_clear();
-                      os.exit(code);
-                    end;
-                    node.done = true;
-                    node.dirty = nil;
-                  end
-                );
+                      if not ok and strict then --abort ...
+                        jobs_clear();
+                        os.exit(code);
+                      end;
+                      node.done = true;
+                      node.dirty = nil;
+                    end
+                  );
+                end;
               end;
             end;
           end;
@@ -2823,7 +2842,9 @@ do -- [tools] ==================================================================
       if #txt == 0 then return nil; end;
       local tl = clTargetList:new();
       for _, n in ipairs(txt) do
-        tl:new_sourcefile(n);
+        if not GeneratedFiles:find(n) then
+          tl:new_sourcefile(n);
+        end;
       end;
       return tl;
     end;
@@ -3495,6 +3516,46 @@ do -- [tools] ==================================================================
   function Rule:action_create(...)
     local par = self:checkParam(...);
     --
+    local function genfunc(src, dst)
+      local p, func = {}, par.func;
+      for n in par.action:gmatch"$(%u+)" do
+        if n == "SOURCE" then
+          if class(src, "File") then
+            p.source = src[1];
+          elseif class(src, "TargetList") and #src == 1 then
+            p.source = src[1][1];
+          else
+            error("invalid parameter 'src'.");
+          end;
+        elseif n == "SOURCES" then
+          if class(src, "File") then
+            p.source = {src:canonical()};
+          elseif class(src, "TargetList") then
+            p.source = {};
+            for i = 1, #src do
+              insert(p.source, src[i]:canonical());
+            end;
+          else
+            error("invalid parameter 'src'.");
+          end;
+        elseif n == "OUTFILE" then
+          if class(dst, "File") then
+            p.outfile = dst:canonical();
+          else
+            error("invalid parameter 'dst'.");
+          end;
+        else
+          n = string.lower(n);
+          if type(par[n]) == "string" then
+            p[n] = par[n]
+          else
+            quitMF("rule(): parameter '%s' needs to be a string.", n);
+          end;
+        end;
+      end;
+      return function() return func(p); end;
+    end;
+    --
     par.type = par.type or "obj";
     if par.prog then
       local prog = par.prog;
@@ -3523,7 +3584,7 @@ do -- [tools] ==================================================================
     --
     local result;
     if par.action:find("$SOURCE%f[%U]") then -- one node for each source
-      par.action = par.action:gsub("$SOURCE%f[%U]", "$SOURCES");
+      --par.action = par.action:gsub("$SOURCE%f[%U]", "$SOURCES");
       result = clTargetList:new();
       for sf in src() do
         local fn = fn_forceExt(fn_basename(sf[1]), par.outext or self.OBJ_EXT or self.toolchain.OBJ_EXT);
@@ -3543,9 +3604,10 @@ do -- [tools] ==================================================================
         of.base          = src.base;
         of.type          = par.type;
         of.prerequisites = src.prerequisites;
-        of.action        = par.action;
+        of.func          = par.func and genfunc(sf, of) or nil;
+        of.action        = par.action:gsub("$SOURCE", sf:canonical()):gsub("$OUTFILE", of:canonical());
         for n, v in pairs(par) do
-          if of.action:find("$"..string.upper(n)) then
+          if of.action:find("$"..string.upper(n).."%f[%U]") then
             of.action = of.action:gsub("$"..string.upper(n).."%f[%U]", v);
             processed:add(n);
           end;
@@ -3564,9 +3626,10 @@ do -- [tools] ==================================================================
       result.tool          = self;
       result.type          = par.type;
       result.prerequisites = src.prerequisites;
-      result.action        = par.action;
+      result.func          = par.func and genfunc(src, result) or nil;
+      result.action        = par.action:gsub("$SOURCES", src:canonical()):gsub("$OUTFILE", result:canonical());
       for n, v in pairs(par) do
-        if result.action:find("$"..string.upper(n)) then
+        if result.action:find("$"..string.upper(n).."%f[%U]") then
           result.action = result.action:gsub("$"..string.upper(n).."%f[%U]", v);
           processed:add(n);
         end;
@@ -3577,6 +3640,7 @@ do -- [tools] ==================================================================
     par.odir   = nil;
     par.type   = nil;
     par.outext = nil;
+    par.func   = nil;
     par.action = nil;
     --
     for n in processed() do par[n] = nil; end; -- clear processed params
