@@ -1,0 +1,45 @@
+-- This include file defines a global rule `bin2c`.
+
+if bin2c == nil then -- not loaded yet?
+  local numtab={}; 
+  for i = 0, 255 do numtab[string.char(i)] = ("%3d,"):format(i); end;
+  
+  --- **b2c(par)**.
+  --  `par`: _table_.
+  --       `.source`:  _string_. source file name
+  --       `.outfile`: _string_. output file name
+  --       `.command`: _string_. c command dealing with the binary data `"B1"`.
+  --       All other fields are ignored.
+  local function b2c(par)
+    local function msg(s, ...) return ("bin2c(): "..s):format(...); end;
+    -- read sourcefile
+    local ifname = par.source:gsub(".*/", "");
+    local ifile  = io.open(par.source,  "rb");
+    if not ifile then return nil, msg("cant open %s.",par.source); end;
+    local source = ifile:read("*a");
+    ifile:close();
+    --
+    local ofile  = io.open(par.outfile, "w+");
+    if not ofile then 
+      ifile:close();
+      return nil, msg("cant open %s.",par.outfile); 
+    end;
+    local res = ofile:write(
+        "\n{\n static const unsigned char B1[]={\n",
+        source:gsub(".", numtab):gsub(("."):rep(80), "%0\n"), 
+        "\n};\n\n",
+        par.command:format(ifname),
+        ";\n}\n"
+        );
+    ofile:close();
+    if res then return true; end;
+    return nil, msg("error writing %s.",par.outfile); 
+  end;
+  
+  --- bin2c: exported rule template.
+  bin2c = rule.define {func=b2c, 
+                       command="if (luaL_loadbuffer(L,(const char*)B1,sizeof(B1),%q)==0) lua_pcall(L, 0, 0, 0)",
+                       action="bin2c $SOURCE $OUTFILE $COMMAND"
+                      }
+  --
+end;

@@ -1,6 +1,7 @@
--- Required Modules: lpeg
+-- This include file defines a global rule `striplua` to strip comments and whitespaces.
+-- requires `lpeg` for stripping.
 
-if luastrip == nil then
+if luastrip == nil then -- not loaded yet?
   local PARSER;
   local lpeg_found, lpeg = pcall(require, "lpeg");
   if lpeg_found then
@@ -17,9 +18,7 @@ if luastrip == nil then
     local ALPHA    = locale.alpha + P"_";
     local ALPHANUM = ALPHA + DIGIT;
     local SHEBANG  = BOF * P"#" * (ANY - EOL)^0 * EOL;
-    local function K(w) 
-      return P(w) * -ALPHANUM; 
-    end;
+    local function K(w) return P(w) * -ALPHANUM; end;
     PARSER = Cs{
       "chunk";
       spc = (SPACE + V"comment")^0 / "",
@@ -118,12 +117,19 @@ if luastrip == nil then
     };
   end;
   --
-  function luastrip(par)
+  --- **lstrip(par)**.
+  --  `par`: _table_.
+  --       `.source`:  _string_. source file name
+  --       `.outfile`: _string_. output file name
+  --       All other fields are ignored.
+  --  Required Modules: lpeg. (if lpeg can't be found, the 
+  --  result file is a unstripped copy of the source file.
+  local function lstrip(par)
     --
     local function msg(s, ...) return ("luastrip(): "..s):format(...); end;
     local source;
     --
-    -- read main source
+    -- read source file
     local ifile = io.open(par.source);
     if not ifile then return nil, msg("cant open '%s'.", par.source); end;
     source = ifile:read("*a");
@@ -131,7 +137,7 @@ if luastrip == nil then
     -- strip lua source
     if lpeg_found then 
       source = PARSER:match(source); 
-      if not source then return nil, msg("syntax error in file '%s'.", par.source); end;
+      if not source then return nil, msg("lua syntax error in file '%s'.", par.source); end;
     end;
     -- write outfile
     local ofile = io.open(par.outfile, "w+");
@@ -143,4 +149,7 @@ if luastrip == nil then
     of:close();
     return nil, msg("cant write to '%s'.", par.outfile); 
   end;
+  --- luastrip: exported rule template.
+  luastrip = rule.define {func=lstrip, action="lstrip $SOURCE $OUTFILE"}
+  --
 end;
