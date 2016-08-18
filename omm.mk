@@ -13,7 +13,7 @@ include "luaglue"
 
 local OMM = {
   -- glue stripped lua source to mk.exe
-  luaglue{odir=LUA_BIN, loader="mk.exe", force=true, 
+  luaglue{"mk", odir=LUA_BIN, loader="mk.exe", force=true, 
           inputs=luastrip{src="mk.lua", odir=TEMPDIR}
          },
   -- copy include files into Lua's package.path

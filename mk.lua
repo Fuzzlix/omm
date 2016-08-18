@@ -3578,11 +3578,26 @@ do -- [tools] ==================================================================
     if type(par.action) ~= "string" then quitMF("rule(): action needs to be a string."); end;
     --
     local result;
+    -- default action parameter checks
+    if par.action:find("$SOURCE%f[%U]") and par.action:find("$SOURCES%f[%U]") then
+      quitMF("rule(): $SOURCE and $SOURCES can't be used at the same time.");
+    elseif par.func and not (par.action:find("$SOURCE%f[%U]") or par.action:find("$SOURCES%f[%U]")) then
+      quitMF("rule(): $SOURCE or $SOURCES needed in .action parameter.");
+    elseif not par.action:find("$OUTFILE%f[%U]") then
+      quitMF("rule(): $OUTFILE needed in .action parameter.");
+    end;
     if par.action:find("$SOURCE%f[%U]") then -- one node for each source
       result = clTargetList:new();
       for sf in src() do
-        local fn = fn_forceExt(fn_basename(sf[1]), par.outext or self.OBJ_EXT or self.toolchain.OBJ_EXT);
-        if type(par[1]) == "string" then fn = par[1] .. "_" .. fn; end;
+        local fn;
+        if type(par.type) == "string" and ("prog dlib slib"):find(par.type) then
+          local ext = par.type:upper().."_EXT";
+          fn = fn_forceExt(par[1] or fn_basename(sf[1]), par.outext or self[ext] or self.toolchain[ext]);
+        else
+          fn = fn_basename(sf[1])
+          if type(par[1]) == "string" then fn = par[1].."_"..fn; end;
+          fn = fn_forceExt(fn, par.outext or self.OBJ_EXT or self.toolchain.OBJ_EXT);
+        end;
         local of = result:new_generatedfile(par.odir, fn);
         of.prerequisites = src.prerequisites;
         of.deps          = sf;
