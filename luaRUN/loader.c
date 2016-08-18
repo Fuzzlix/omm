@@ -111,7 +111,7 @@ Glue  GlueInfo;
 State S;
 
 static int glue_found() {
-  S.f = fopen(argv[0], "rb");
+  S.f = fopen(szAppName, "rb");
   if (S.f == NULL) return 0;
   if ((fseek(S.f, -sizeof(GlueInfo), SEEK_END) == 0) && 
       (fread(&GlueInfo, sizeof(GlueInfo), 1, S.f) == 1) && 
@@ -176,8 +176,7 @@ static int loadGlue(lua_State *L) {
 #endif
 
 int main() {
-  char *file;
-  GetFullPathName(argv[0], MAX_PATH, szAppName, &file);
+  GetModuleFileName(NULL, szAppName, MAX_PATH);
   lua_State *L = luaL_newstate();
   if (L != NULL) {
     luaL_openlibs(L);
@@ -185,7 +184,6 @@ int main() {
     // filling arg table ...
     lua_createtable(L, argc, 0);
     lua_pushstring(L, szAppName); // [-0, +1, m]
-    *file = 0;
     lua_rawseti(L, -2, 0); // arg[0] = full exe_name
     int i;
     for (i = 1; i < argc; i++) { // command line arguments
