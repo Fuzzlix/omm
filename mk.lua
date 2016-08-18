@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.10-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.11-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -1770,10 +1770,11 @@ do -- [MakeScript Sandbox] =====================================================
     end,
     include = function(filename)
       filename = fn_defaultExt(filename, ".mki");
-      local makefile;
+      local makefile, errmsg; 
       for dir in includepath() do
-        makefile = loadfile (fn_join(dir, filename), "t", clMakeScript);
+        makefile, errmsg = loadfile (fn_join(dir, filename), "t", clMakeScript);
         if makefile then break; end;
+        if not errmsg:find("cannot open") then quit("make(): %s", errmsg); end;
       end;
       if makefile then 
         if setfenv then setfenv(makefile, clMakeScript); end; -- lua 5.1
@@ -1789,6 +1790,7 @@ do -- [MakeScript Sandbox] =====================================================
     print   = print,
     require = require,
     io      = roTable(io),
+    math    = roTable(math),
     string  = roTable(string),
     table   = roTable(table),
     quit    = quitMF,
@@ -3539,10 +3541,10 @@ do -- [tools] ==================================================================
           end;
         else
           n = string.lower(n);
-          if type(par[n]) == "string" then
+          if ("string boolean number nil"):find(type(par[n])) then
             p[n] = par[n]
           else
-            quitMF("rule(): parameter '%s' needs to be a string.", n);
+            quitMF("rule(): parameter '%s' needs to be string or number or boolean.", n);
           end;
         end;
       end;
