@@ -37,6 +37,7 @@ make "lua52"
 make "modules"
 make "lua53"
 make "modules"
+make "omm" 
 --make "tools"
 
 --[[-- This build script a patched package.path and package.cpath:

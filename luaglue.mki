@@ -1,0 +1,67 @@
+-- This include file defines a global rule `bin2c`.
+
+if luaglue == nil then -- not loaded yet?
+
+  --- **glue(par)**.
+  --  `par`: _table_.
+  --       `.source`:  _string_.  source file name
+  --       `.outfile`: _string_.  output file name
+  --       `.loader`:  _string_.  loader executable name.
+  --       `.force`:   _boolean_. dont verify loader signature.
+  --                         usefull for blanc loader exe without attached lua prog.
+  --       All other fields are ignored.
+  local function glue(par)
+    local GLUESIG = "%%glue:L";
+    --local LUACSIG = "\x1bLuaR";
+    local stub;
+    local function msg(s, ...) return ("luaglue(): "..s):format(...); end;
+    local function checkloader()
+      if par.loader:sub(-4, -1) == ".exe" then
+        local sfile = io.open(par.loader, "rb");
+        if sfile then
+          local stublen;
+          sfile:seek("end", -(8 + #GLUESIG));
+          if GLUESIG == sfile:read(#GLUESIG) then
+            stublen = (sfile:read(1):byte()) +
+                      (sfile:read(1):byte() * 256) +
+                      (sfile:read(1):byte() * 256^2) +
+                      (sfile:read(1):byte() * 256^3);
+          elseif par.force then
+            stublen = "*a";
+          else
+            return nil; -- error
+          end;
+          sfile:seek("set", 0);
+          stub = sfile:read(stublen);
+          sfile:close();
+          if stub then return true; end;
+        end;
+      end;
+    end;
+    
+    local function linteger(num)
+      local function byte(n) return math.floor(num / (256^n)) % 256; end;
+      return string.char(byte(0),byte(1),byte(2),byte(3));
+    end;
+    
+    if checkloader() then
+      local ifile = io.open(par.source, "rb");
+      if not ifile then return nil, "error: cant open '" .. par.source .. "'."; end;
+      local luafile = ifile:read("*a");
+      ifile:close();
+      local ofile = io.open(par.outfile, "wb");
+      if ofile then
+        return ofile:write(stub, luafile, GLUESIG, linteger(#stub), linteger(#luafile)) and ofile:close() and true or nil,
+               "error: cant write to '" .. par.outfile .. "'.";
+      else
+        return nil, "error: cant open '" .. par.outfile .. "'."
+      end;
+    else
+      return nil, "error: no valid loader found.";
+    end;
+  end;
+  --- gluelua: exported rule template.
+  luaglue = rule.define {func=glue, outext=".exe", type="prog",
+                         action="glue $SOURCE $OUTFILE $LOADER $FORCE"}
+  --
+end
