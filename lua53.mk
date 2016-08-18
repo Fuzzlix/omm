@@ -65,6 +65,6 @@ define_need{'lua53s', -- lua53, statically linked libs
 };
 --
 -- aliases for compiling the modules
-make.Needs "lua = lua53"   
-make.Needs "luas = lua53s" 
+define_need "lua = lua53"   
+define_need "luas = lua53s" 
 

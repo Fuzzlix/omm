@@ -65,6 +65,6 @@ define_need{'lua51s', -- lua51, statically linked libs
   LUAVERSION    = LUA_VERSION
 };
 --
-make.Needs "lua = lua51"   -- need alias.
-make.Needs "luas = lua51s" -- need alias.
+define_need "lua = lua51"   -- need alias.
+define_need "luas = lua51s" -- need alias.
 

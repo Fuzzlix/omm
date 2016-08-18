@@ -1,5 +1,4 @@
 --- makefile for luaJIT
--- (NOT FULL TESTED YET!) At least it compiles a win32 executable and modules. win32 executable not full tested yet.
 --
 if not WINDOWS then quit("We are not running on Windows?") end;
 --
@@ -97,5 +96,5 @@ define_need{'luajits', -- luajit, statically linked libs
   LUAVERSION    = LUA_VERSION
 };
 --
-make.Needs "lua = luajit"   -- need alias.
-make.Needs "luas = luajits" -- need alias.
+define_need "lua = luajit"   -- need alias.
+define_need "luas = luajits" -- need alias.
