@@ -3668,6 +3668,15 @@ do -- [tools] ==================================================================
     if par[1] then quitMF("rule.define(): field 'outfile name' not allowed in templates."); end;
     -- TODO: more field checks.
     --
+    if class(par.template, "Tool") and par.template.__par then
+      local p = {};
+      local t = par.template.__par;
+      par.template = nil;
+      for n, v in pairs(t) do p[n] = v; end;
+      for n, v in pairs(par) do p[n] = v; end;
+      par = p;
+    end;
+    --
     local tool = clTool:new{
       toolchain = tc,
       __par = par,
