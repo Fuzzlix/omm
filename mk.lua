@@ -2979,7 +2979,8 @@ do -- [tools] ==================================================================
   function clTool:build_command(TreeNode)
     local result = pick(TreeNode.action, self["command_"..(TreeNode.type or "")], self.command);
     for j in result:gmatch("%$(%u+)") do
-      result = result:gsub("%$"..j, (self["process_"..j](self, TreeNode)));
+      local s = TreeNode.__par and TreeNode.__par[j:lower()] or nil;
+      result = result:gsub("%$"..j, s or (self["process_"..j] and (self["process_"..j](self, TreeNode)) or ""));
     end;
     return result;
   end;
@@ -3650,9 +3651,7 @@ do -- [tools] ==================================================================
       result.action        = par.action;
       for var in result.action:gmatch("$%u+%f[%U]") do
         if not ("$SOURCES $OUTFILE"):find(var) then
-          local fn = var:sub(2):lower();
-          result.action = result.action:gsub(var, ""); --TODO: insert parameter value into result.action
-          processed:add(fn);
+          processed:add(var:sub(2):lower());
         end;
       end;
     end;
@@ -3664,9 +3663,8 @@ do -- [tools] ==================================================================
     par.func   = nil;
     par.action = nil;
     --
-    for n in processed() do par[n] = nil; end; -- clear processed params
-    --
-    self:allParamsEaten(par);
+    --self:allParamsEaten(par);
+    result.__par = par;
     return result;
   end;
   

@@ -19,7 +19,6 @@ local LUA_LDIR   = LUA_BIN.."/lua"
 svn.checkout{"lfs", "https://github.com/keplerproject/luafilesystem/trunk"}
 if make.path.isDir("lfs") then -- module lfs
   --  [[ 
-  --print(make.Needs("lua").LUAVERSION)
   local DOCDIR  = MODULES .. "/lfs/doc/us";
   local MODULES = MODULES .. "/lfs/src";
   local MODS_C  = c99 {"lfs_s", src="lfs", base=MODULES, odir=TEMPDIR, needs="luas", cflags=CFLAGS}
@@ -34,7 +33,6 @@ if make.path.isDir("lfs") then -- module lfs
     target("lfs_doc", MODDOC)
     default{MODDOC}
   end;
-  --
   --]]
 end;
 
@@ -162,6 +160,7 @@ if make.path.isDir("lanes") then -- module lanes
   --]]
 end; 
 
+svn.checkout{"iuplua", "https://github.com/Fuzzlix/iup/trunk"}
 if make.path.isDir("iuplua") then 
   -- [[
   make "iuplua"

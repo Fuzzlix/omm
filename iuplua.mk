@@ -9,13 +9,13 @@ TEMPDIR = TEMPDIR or LUAROOT.."/tmp" -- dir for intermediate files
 IUPROOT = LUAROOT.."/iuplua"
 IUPBIN  = LUA_BIN
 --
+local LUAVER  = make.Needs"lua".LUAVERSION
+--
 if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
-  svn.checkout{"iuplua", "https://github.com/Fuzzlix/iup/trunk"}
   if make.path.isDir("iuplua") then -- module iuplua
     --
     make "iup"
     --
-    local LUAVER  = make.Needs"lua".LUAVERSION
     local TEMPDIR = TEMPDIR.."/"..LUAVER
     --
     include "luastrip" -- load luastrip rule.

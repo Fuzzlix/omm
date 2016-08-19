@@ -33,12 +33,14 @@ CFLAGS  = "-pipe"
 make "luajit20"
 --make "lua51"
 make "modules"
+--
 make "lua52"
 make "modules"
+--
 make "lua53"
 make "modules"
-make "omm" 
---make "tools"
+--
+make "omm"
 
 --[[-- This build script a patched package.path and package.cpath:
        (Otherwise the resulting executables may not find the libs in
