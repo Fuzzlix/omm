@@ -1738,13 +1738,17 @@ do -- [MakeScript Sandbox] =====================================================
       end;
     end;
   end;
-  --
+  -- makescript filenames
+  local scriptnames = {};
+  
   clMakeScript = class.Base:subclass{
     __classname  = "MakeScript";
     __call  = function(self, filename)
       local makefile, err = loadfile (filename, "t", self);
       if makefile then 
         if setfenv then setfenv(makefile, self); end; -- lua 5.1
+        insert(scriptnames, clMakeScript.MAKEFILENAME);
+        clMakeScript.MAKEFILENAME = filename;
         local path = fn_splitpath(filename);
         if path ~= "" then chdir(path); end;
         clMakeScript.PWD = PWD;
@@ -1758,6 +1762,7 @@ do -- [MakeScript Sandbox] =====================================================
         makefile();
         MAKELEVEL = MAKELEVEL - 1;
         clMakeScript.MAKELEVEL = MAKELEVEL;
+        clMakeScript.MAKEFILENAME = remove(scriptnames);
         if path ~= "" then chdir("<"); end;
       else 
         quit(err, 2);
@@ -1770,15 +1775,20 @@ do -- [MakeScript Sandbox] =====================================================
     end,
     include = function(filename)
       filename = fn_defaultExt(filename, ".mki");
+      local makefilename;
       local makefile, errmsg; 
       for dir in includepath() do
-        makefile, errmsg = loadfile (fn_join(dir, filename), "t", clMakeScript);
+        makefilename = fn_join(dir, filename);
+        makefile, errmsg = loadfile (makefilename, "t", clMakeScript);
         if makefile then break; end;
         if not errmsg:find("cannot open") then quit("make(): %s", errmsg); end;
       end;
       if makefile then 
         if setfenv then setfenv(makefile, clMakeScript); end; -- lua 5.1
+        insert(scriptnames, clMakeScript.MAKEFILENAME);
+        clMakeScript.MAKEFILENAME = makefilename;
         makefile();
+        clMakeScript.MAKEFILENAME = remove(scriptnames);
       else
         quitMF("make(): cant find include file '%s'.", filename); 
       end;
