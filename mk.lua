@@ -3628,9 +3628,8 @@ do -- [tools] ==================================================================
         of.action        = par.action:gsub("$SOURCE%f[%U]", "$SOURCES");
         for var in of.action:gmatch("$%u+%f[%U]") do
           if not ("$SOURCES $OUTFILE"):find(var) then
-            local fn = var:sub(2):lower();
-            of.action = of.action:gsub(var, ""); --TODO: insert parameter value into of.action
-            processed:add(fn);
+            of.action = of.action:gsub(var, "");
+            processed:add(var:sub(2):lower());
           end;
         end;
       end;
