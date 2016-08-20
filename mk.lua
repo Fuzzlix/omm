@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.12-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.13-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -2184,7 +2184,7 @@ do
       dprint("===================")
     end;
     --]]
-    return lvlTbl;
+    return lvlTbl, #FileList;
   end;
   --
   -- phony targets.
@@ -2324,7 +2324,7 @@ do
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
       quit("make(): file '%s' does not exist.", self[1], 0); 
     end;
-    --dprint(("clGeneratedFile.needsBuild():            %s =>"):format(self[1]));
+    dprint(("clGeneratedFile.needsBuild():            %s =>"):format(self[1]));
     local time    = self:filetime() or -1;
     local dirty   = time == -1;
     local modtime = -1;
@@ -2346,7 +2346,7 @@ do
     end;
     self._scanned = true;
     self._mtime = max(time, modtime)
-    --dprint(("clGeneratedFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
+    dprint(("clGeneratedFile.needsBuild():      %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, self._mtime;
   end;
   
@@ -2695,6 +2695,8 @@ do -- [make pass 2 + 3] ========================================================
     end;
     -- pass 3
     local function makeNode(node) 
+      local lvlTbl;
+      local nodesdone, numnodes = 0;
       -- execute a nodes action and/or commandline.
       local function buildNode(node)
         if node == nil then return; end;
@@ -2702,6 +2704,7 @@ do -- [make pass 2 + 3] ========================================================
         if node.done then return; end;
         if node:is("FilesAndTargets") then 
           if node.dirty then
+            nodesdone = nodesdone +1;
             -- construct command line
             if node:is("GeneratedFile") and not node.command then
               node.command = node.tool:build_command(node);
@@ -2712,6 +2715,7 @@ do -- [make pass 2 + 3] ========================================================
               else
                 local s = node.tool.CMD or fn_basename(fn_splitext(node.command:match("^(%S+)%s")));
                 s = s:upper() .. string.rep(" ", 7 - #s) .. " " .. fn_canonical(node[1]);
+                s = ("[%2d/%2d] "):format(nodesdone , numnodes)..s
                 print(s);
               end;
             end;
@@ -2757,7 +2761,7 @@ do -- [make pass 2 + 3] ========================================================
         end;
       end;
       --
-      local lvlTbl = node:getBuildSequence();
+      lvlTbl, numnodes = node:getBuildSequence();
       for i = #lvlTbl, 1, -1 do
         for _, n in ipairs(lvlTbl[i]) do buildNode(n); end;
         jobs_clear();
