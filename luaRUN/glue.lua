@@ -1,4 +1,8 @@
 
+local function pr(str, ...)
+  print(str:format(...));
+end;
+
 local function glue(ifilename, ofilename)
   local GLUESIG = "%%glue:L"
   local LUACSIG = "\x1bLuaR"
@@ -50,6 +54,12 @@ local function glue(ifilename, ofilename)
   ofile:close()
   print(ofilename .. " written.")
 end
+--
+local function luaVersion()
+  local f = function() return function() end end;
+  local t = {nil, [false]  = 'LUA5.1', [true] = 'LUA5.2', [1/'-0'] = 'LUA5.3', [1] = 'LUAJIT' };
+  return t[1] or t[1/0] or t[f()==f()];
+end;
 
 if #arg == 1 or #arg == 2 then
   glue(arg[1], arg[2])
@@ -61,7 +71,7 @@ else
   if preloaded == "" then
     preloaded = "<none>"
   end
-  print("glue V14/02/08")
-  print("  syntax: glue <luafile> [<exefile>]")
-  print("  preloaded modules: " .. preloaded)
+  pr("glue V16/11/14 (%s)", luaVersion())
+  pr("  syntax: glue <luafile> [<exefile>]")
+  pr("  preloaded modules: %s", preloaded)
 end

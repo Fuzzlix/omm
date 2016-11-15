@@ -1,9 +1,10 @@
-/* loader.c V.16/06/18, universal Console/Win32 Loader.
+/* wstub.c V.16/11/14, universal Console/Win32 Loader.
  * merged ideas from;
  * - srlua.c         (Luiz Henrique de Figueiredo <lhf@tecgraf.puc-rio.br>)
  * - lua.c           (lua5.2.3 Lua.org, PUC-Rio, Brazil (http://www.lua.org))
- * - win32_starter.c (ZBStudio (http://studio.zerobrane.com/))
- 
+ * - win32_starter.c (ZBStudio (https://studio.zerobrane.com/))
+ * - MS website      (https://msdn.microsoft.com/en-us/library/windows/desktop/ms683197(v=vs.85).aspx)
+ *
  * Features:
  *  - all error handling done in [C] including tracebacks. No need for xpcall()
  *  - arg[] Table: arg[0] = full exe name
@@ -40,10 +41,9 @@
 #define argv __argv
 
 // minimalistic lua loader. used in case, no glued lua chunk found.
-static const char *luacode = "\n"
-"dofile(arg[0]:gsub('%.[eE][xX][eE]$','')..'.lua')\n";
+static const char *luacode = "dofile(arg[0]:sub(1,-5)..'.lua')";
 
-char szAppName[MAX_PATH];
+char * szAppName; //char szAppName[MAX_PATH];
 #if defined(GUI_LOADER)
 void printErr(const char *s, const char *h) {
   MessageBox(NULL, s, h, MB_OK|MB_ICONERROR);
@@ -53,6 +53,7 @@ void printErr(const char *s, const char *h) {
   printf(s);
 }
 #endif
+
 static int report(lua_State *L, int status) {
   if (status && !lua_isnil(L, -1)) {
     const char *msg = lua_tostring(L, -1);                        // [-0, +0, m]
@@ -113,7 +114,7 @@ State S;
 static int glue_found() {
   S.f = fopen(szAppName, "rb");
   if (S.f == NULL) return 0;
-  if ((fseek(S.f, -sizeof(GlueInfo), SEEK_END) == 0) && 
+  if ((fseek(S.f, (long int)(-sizeof(GlueInfo)), SEEK_END) == 0) && 
       (fread(&GlueInfo, sizeof(GlueInfo), 1, S.f) == 1) && 
       (memcmp(GlueInfo.sig, GLUESIG, GLUELEN) == 0) &&
       (fseek(S.f, GlueInfo.size1, SEEK_SET) == 0))
@@ -151,7 +152,7 @@ static int loadGlue(lua_State *L) {
 
 #endif //GLUE_LOADER
 
-#if CMOD_PRELOAD
+#ifdef CMOD_PRELOAD
   #include "preloaddef.inc" 
   static const luaL_Reg preloadedlibs[] = {
   #include "preload.inc"
@@ -176,7 +177,7 @@ static int loadGlue(lua_State *L) {
 #endif
 
 int main() {
-  GetModuleFileName(NULL, szAppName, MAX_PATH);
+	szAppName = _pgmptr; //GetModuleFileName(NULL, szAppName, MAX_PATH);
   lua_State *L = luaL_newstate();
   if (L != NULL) {
     luaL_openlibs(L);
