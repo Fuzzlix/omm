@@ -1,4 +1,4 @@
-/* wstub.c V.16/11/14, universal Console/Win32 Loader.
+/* loader.c V.16/11/14, universal Console/Win32 Loader.
  * merged ideas from;
  * - srlua.c         (Luiz Henrique de Figueiredo <lhf@tecgraf.puc-rio.br>)
  * - lua.c           (lua5.2.3 Lua.org, PUC-Rio, Brazil (http://www.lua.org))
