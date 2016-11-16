@@ -9,9 +9,8 @@
 if not WINDOWS then quit("We are not running on Windows?") end;
 --
 -- Adress 32/64 bit targets directly.
--- not all lua .c modules compile in 64bit mode, so stick on 32bit build for now.
-make.toolchain "gnu32"; -- compile to 32bit executables. (or use -m32 commandline parameter)
---make.toolchain "gnu64"; -- compile to 64bit executables. (or use -m64 commandline parameter)
+--make.toolchain "gnu32"; -- compile to 32bit executables. (or use -m32 commandline parameter)
+make.toolchain "gnu64"; -- compile to 64bit executables. (or use -m64 commandline parameter)
 --
 --make.set_flags {OPTIMIZE="Os", NODEPS=true, PREFIX="x86_64-w64-mingw32"};
 -----------------------------------------------------------------------------------------------
@@ -21,8 +20,8 @@ LUA_BIN = LUAROOT.."/_install" -- install dir
           .. (M32 and "32" or "") 
           .. (M64 and "64" or "") 
 TEMPDIR = LUAROOT.."/tmp"      -- dir for intermediate files
-          .. (M32 and "/32" or "") 
-          .. (M64 and "/64" or "") 
+if make.path.isDir("r:/temp") then TEMPDIR = "r:/temp" end -- ramdisk ?
+TEMPDIR = TEMPDIR .. (M32 and "/32" or "") .. (M64 and "/64" or "") 
 --CFLAGS  = "-Werror -pipe" -- Make all warnings into errors.
 CFLAGS  = "-pipe"
 --

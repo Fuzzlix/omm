@@ -16,6 +16,26 @@ local LUA_IDIR   = LUA_BIN.."/include/" .. LUAVER
 local LUA_CDIR   = LUA_BIN.."/lib/" .. LUAVER
 local LUA_LDIR   = LUA_BIN.."/lua"
 
+--svn.checkout{"lsqlite3", "https://github.com/Fuzzlix/lsqlite/branches/0.9.4"}
+if make.path.isDir("lsqlite3") then -- module lsqlite3
+  --  [[ 
+  local MODULES = MODULES .. "/lsqlite3";
+  local DOCDIR  = MODULES .. "/doc";
+  local MODS_C  = c99 {"lsqlite3_s", src="*.c", base=MODULES, odir=TEMPDIR, needs="luas", cflags=CFLAGS}
+  local MODD_C  = c99 {"lsqlite3",   src="*.c", base=MODULES, odir=TEMPDIR, needs="lua", cflags=CFLAGS}
+  --
+  local MODLIB  = c99.library {'lsqlite3'..LUAVER, odir=LUA_IDIR, inputs=MODS_C, needs="luas", cflags=CFLAGS}          
+  local MODDLL  = c99.shared  {'lsqlite3'..LUAVER, odir=LUA_CDIR, inputs=MODD_C, needs="lua", cflags=CFLAGS}
+  target("lsqlite3", {MODLIB, MODDLL})
+  default{MODLIB, MODDLL}
+  if not make.Targets "lsqlite3_doc" then
+    local MODDOC= file {src="*.html *.css", base=DOCDIR, odir=LUA_ETCDIR.."/lsqlite3/doc"}
+    target("lsqlite3_doc", MODDOC)
+    default{MODDOC}
+  end;
+  --]]
+end;
+
 svn.checkout{"lfs", "https://github.com/keplerproject/luafilesystem/trunk"}
 if make.path.isDir("lfs") then -- module lfs
   --  [[ 
