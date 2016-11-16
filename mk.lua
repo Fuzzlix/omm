@@ -2324,11 +2324,11 @@ do
     if not self:exists() and pick(self.deps, self.action) == nil then -- error
       quit("make(): file '%s' does not exist.", self[1], 0); 
     end;
-    dprint(("clGeneratedFile.needsBuild():            %s =>"):format(self[1]));
     local time    = self:filetime() or -1;
     local dirty   = time == -1;
     local modtime = -1;
-    if self.prerequisites then
+    dprint("clGeneratedFile.needsBuild():            %s => %i", self[1], time);
+    if self.prerequisites and #self.prerequisites > 0 then
       local res, mt;
       for node in self.prerequisites() do
         res, mt = node:needsBuild(always_make);
@@ -2338,7 +2338,7 @@ do
         end;
       end;
     end;
-    self.dirty = self.dirty or dirty or time < modtime or always_make;
+      self.dirty = self.dirty or dirty or time < modtime or always_make;
     time = max(time, modtime);
     if self.deps then
       dirty, modtime = self.deps:needsBuild(always_make);
