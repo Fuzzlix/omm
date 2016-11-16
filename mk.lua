@@ -29,7 +29,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true; -- enable some debugging output. see: dprint()
 --
-local VERSION = "mk 0.4.13-beta\n  A lua based extensible build engine.";
+local VERSION = "mk 0.4.14-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: mk [options] [target[,...]]
 
@@ -3115,6 +3115,12 @@ do -- [tools] ==================================================================
       sources.libs:add(par.libs);
       par.libs = nil;
     end;
+    -- libdir = ...
+    if par.libdir    then
+      sources.libdir:add(par.libdir);
+      par.libdir = nil;
+    end;
+    -- cflags = ...
     if par.cflags  then
       sources.cflags:add(par.cflags);
       par.cflags = nil;
