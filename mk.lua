@@ -2337,8 +2337,8 @@ do
           modtime = max(modtime, mt);
         end;
       end;
-    end;
       self.dirty = self.dirty or dirty or time < modtime or always_make;
+    end;
     time = max(time, modtime);
     if self.deps then
       dirty, modtime = self.deps:needsBuild(always_make);
