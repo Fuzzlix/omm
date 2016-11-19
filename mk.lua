@@ -428,7 +428,7 @@ package.preload["Cmdl"]  = function(...)
         for _, sw in ipairs(shortParamNames) do
           sw = sw:gsub("([%-%?])","%%%1");
           if str:match("^"..sw) then
-            cmd, val = str:match("^("..sw..")(.*)$"); 
+            cmd, val = str:match("^("..sw..")[=]?(.*)$"); 
             val = val and #val > 0 and val or nil;
             break;
           end;
@@ -2082,7 +2082,6 @@ do -- [flag handling] ==========================================================
   };
   --
 end;
-
 --
 --=== [file & target handling] =================================================
 local clSourceFile, clGeneratedFile, clTargetList;
