@@ -1049,11 +1049,11 @@ do -- [list classes] ===========================================================
 end; -- list classes
 --
 ----- [filename and path functions] ============================================
-local fn_temp,     fn_isabs,      fn_canonical,  fn_join,      fn_isFile,   
-      fn_isDir,    fn_defaultExt, fn_exists,     fn_forceExt,  fn_splitext,  
-      fn_get_ext,  fn_splitpath,  fn_ensurePath, fn_basename,  fn_path_lua,  
-      fn_cleanup,  fn_abs,        fn_which,      fn_filetime,  fn_get_files, 
-      fn_files_from_mask, fn_get_directories;
+local fn_temp,     fn_isabs,      fn_canonical,  fn_join,     fn_isFile,   
+      fn_isDir,    fn_defaultExt, fn_exists,     fn_forceExt, fn_splitext,  
+      fn_get_ext,  fn_splitpath,  fn_ensurePath, fn_basename, fn_path_lua,  
+      fn_cleanup,  fn_abs,        fn_rel,        fn_which,    fn_filetime,  
+      fn_get_files, fn_files_from_mask, fn_get_directories;
 do
   --
   local gsub = string.gsub;
@@ -1223,6 +1223,13 @@ do
     end;
     path = fn_path_lua(path); -- windows paths not used inside this script
     return fn_cleanup(path);
+  end;
+
+  function fn_rel(path, base)
+    path = fn_cleanup(path);
+    base = fn_cleanup(base or PWD).."/";
+    path = path:gsub(base,"")
+    return path;
   end;
 
   function fn_which(prog)
@@ -2703,7 +2710,7 @@ do -- [make pass 2 + 3] ========================================================
         if node.done then return; end;
         if node:is("FilesAndTargets") then 
           if node.dirty then
-            nodesdone = nodesdone +1;
+            nodesdone = nodesdone + 1;
             -- construct command line
             if node:is("GeneratedFile") and not node.command then
               node.command = node.tool:build_command(node);
@@ -2713,7 +2720,7 @@ do -- [make pass 2 + 3] ========================================================
                 print(node.command); 
               else
                 local s = node.tool.CMD or fn_basename(fn_splitext(node.command:match("^(%S+)%s")));
-                s = s:upper() .. string.rep(" ", 7 - #s) .. " " .. fn_canonical(node[1]);
+                s = s:upper() .. string.rep(" ", 7 - #s) .. " " .. fn_canonical(fn_rel(node[1]));
                 s = ("[%2d/%2d] "):format(nodesdone , numnodes)..s
                 print(s);
               end;
@@ -2916,15 +2923,15 @@ do -- [tools] ==================================================================
     local result = {};
     if class(TreeNode, "GeneratedFile") then
       if class(TreeNode.deps, "File") then 
-        insert(result, fn_canonical(TreeNode.deps[1]));
+        insert(result, fn_canonical(fn_rel(TreeNode.deps[1])));
       elseif class(TreeNode.deps, "TargetList") then
         for sf in TreeNode.deps() do
-          insert(result, fn_canonical(sf[1]));
+          insert(result, fn_canonical(fn_rel(sf[1])));
         end;
       end;
     elseif class(TreeNode, "TargetList") then
       for sf in TreeNode() do
-        insert(result, fn_canonical(sf[1]));
+        insert(result, fn_canonical(fn_rel(sf[1])));
       end;
     end;
     if #result == 0 then 
@@ -2935,7 +2942,7 @@ do -- [tools] ==================================================================
   
   function clTool:process_OUTFILE(TreeNode)
     if class(TreeNode, "GeneratedFile") then
-      return fn_canonical(TreeNode[1]);
+      return fn_canonical(fn_rel(TreeNode[1]));
     else
       error("OUTFILE is not of class GeneratedFile", 2);
     end;
