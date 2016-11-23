@@ -10,7 +10,7 @@ IUPROOT = LUAROOT.."/iuplua"
 IUPBIN  = LUA_BIN
 --
 local LUAVER  = make.Needs"lua".LUAVERSION
---
+--svn checkout svn://svn.code.sf.net/p/iup/iup/trunk/iup iup
 if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
   if make.path.isDir("iuplua") then -- module iuplua
     --
@@ -29,7 +29,7 @@ if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
                    iup_sbox.c iup_scrollbox.c iup_normalizer.c iup_tree.c iup_split.c iup_layoutdlg.c \z
                    iup_recplay.c iup_progressdlg.c iup_expander.c iup_open.c iup_table.c iup_canvas.c \z
                    iup_gridbox.c iup_detachbox.c iup_backgroundbox.c iup_linefile.c iup_config.c \z
-                   iup_flatbutton.c iup_animatedlabel.c iup_draw.c \z
+                   iup_flatbutton.c iup_flatframe.c iup_animatedlabel.c iup_draw.c \z
                    win/iupwin_common.c win/iupwin_brush.c win/iupwin_focus.c win/iupwin_font.c \z
                    win/iupwin_globalattrib.c win/iupwin_handle.c win/iupwin_key.c win/iupwin_str.c \z
                    win/iupwin_loop.c win/iupwin_open.c win/iupwin_tips.c win/iupwin_info.c \z
@@ -45,7 +45,7 @@ if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
       if make.get_flag("DEBUG") then 
         DEFINES = DEFINES .. " IUP_ASSERT"
       end
-      local SRCDIR   = LUAROOT .. "/iuplua/iup/src"
+      local SRCDIR   = IUPROOT.. "/src"
       local INCLUDES = ". ../include win ../etc"
       local NEEDS    = "windows"
       DLIBO = c99 {"iup", 
@@ -58,7 +58,7 @@ if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
     include "bin2c"    -- load bin2c rule.
     --
     local LUA_CDIR = LUA_BIN.."/lib/"..LUAVER
-    local SRCDIR   = IUPROOT.."/iup/srclua5"
+    local SRCDIR   = IUPROOT.."/srclua5"
     local INCLUDES = TEMPDIR.." . ../include ../src"
     local NEEDS    = "lua windows"
     local DEFINES  = "IUPLUA_USELH"
@@ -67,7 +67,7 @@ if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
                      item image imagergb imagergba label expander link menu multiline list separator user \z
                      submenu text toggle vbox zbox timer detachbox sbox scrollbox split spin spinbox cbox \z
                      radio val tabs fontdlg tree progressbar messagedlg progressdlg backgroundbox flatbutton \z
-                     animatedlabel calendar datepick param parambox"
+                     flatframe animatedlabel calendar datepick param parambox"
   
     local SRCLUA  = addprefix("elem/", addsuffix( ".lua", CTRL)).." iuplua.lua constants.lua iup_config.lua" 
     

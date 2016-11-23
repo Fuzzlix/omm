@@ -180,7 +180,7 @@ if make.path.isDir("lanes") then -- module lanes
   --]]
 end; 
 
-svn.checkout{"iuplua", "https://github.com/Fuzzlix/iup/trunk"}
+svn.checkout{"iuplua", "svn://svn.code.sf.net/p/iup/iup/trunk/iup"}
 if make.path.isDir("iuplua") then 
   -- [[
   make "iuplua"
