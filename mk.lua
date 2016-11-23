@@ -2307,11 +2307,11 @@ do
   clSourceFile.needsBuild = function(self, always_make)
     --dprint(("clSourceFile.needsBuild():               %s"):format(self[1]));
     if self._scanned then return self.dirty, self._mtime; end;
-    local dirty, modtime, time = false, -1, self:filetime();
+    local dirty, modtime, time = false, -1, self:filetime() or -1;
     if self.deps then dirty, modtime = self.deps:needsBuild(always_make); end;
     self.dirty = self.dirty or dirty or always_make;
     self._scanned = true;
-    self._mtime = max(time, modtime)
+    self._mtime = max(time or -1, modtime or -1)
     --dprint(("clSourceFile.needsBuild():         %s %s"):format(self.dirty and "DIRTY" or "clean", self[1]));
     return self.dirty, self._mtime;
   end;
@@ -3905,7 +3905,7 @@ package.preload["tc_repositories"] = function(...) --TODO
       if type(url) ~= "string" then quitMF("no valid url given."); end;
       if fn.exists(dir) and not fn.isDir(dir) then quitMF("cant overwrite '%s'.", dir); end;
       local filetime_delta = os.time() - fn_filetime(fnx);
-      if filetime_delta < 86400 then return; end; -- checkout at least 24 hours old ?
+      if filetime_delta < 86400 and fn_exists(dir) then return; end; -- checkout at least 24 hours old ?
     end;
     local cmd = "svn checkout " .. url .. " " .. dir;
     if Make.options.verbose then
