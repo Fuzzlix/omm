@@ -1,40 +1,31 @@
---[[ makefile for lua-5.1, lua-5.2, lua-5.3 and modules, ...
--- Build a lua environment for windows, where all lua versions resides side by side in one 
--- directory tree including there modules, libraries, documentation and lua tools.
--- It creates a `"install` folder containing all content you may want for copy 
--- to `c:\lua` (for instance).
--- This makefile is not intended to work on other OS than Windows.
--- it is tested with [TDM-GCC-64](https://tdm-gcc.tdragon.net/)
---]]
 if not WINDOWS then quit("We are not running on Windows?") end;
 --
--- Adress 32/64 bit targets directly.
---make.toolchain "gnu32"; -- compile to 32bit executables. (or use -m32 commandline parameter)
-make.toolchain "gnu64"; -- compile to 64bit executables. (or use -m64 commandline parameter)
+--include "gnu64";
+include "gnu32";
+include "svn";
+include "windows";
 --
---make.set_flags {OPTIMIZE="Os", NODEPS=true, PREFIX="x86_64-w64-mingw32"};
+OPTIMIZE = "O2";
+NODEPS   = true;
+--
 -----------------------------------------------------------------------------------------------
 --
-LUAROOT = PWD                  -- base of the lua build tree
-LUA_BIN = LUAROOT.."/_install" -- install dir
-          .. (M32 and "32" or "") 
-          .. (M64 and "64" or "") 
-TEMPDIR = LUAROOT.."/tmp"      -- dir for intermediate files
-if make.path.isDir("r:/temp") then TEMPDIR = "r:/temp" end -- ramdisk ?
-TEMPDIR = TEMPDIR .. (M32 and "/32" or "") .. (M64 and "/64" or "") 
---CFLAGS  = "-Werror -pipe" -- Make all warnings into errors.
-CFLAGS  = "-pipe"
+LUAROOT   = PWD;     -- base of the lua build tree (location of this makefile)
+LUA_BIN   = LUAROOT .. "/_install" .. (M32 and "32" or "") .. (M64 and "64" or "");
+TEMPDIR   = "/temp" .. (M32 and "/32" or "") .. (M64 and "/64" or "");
+make.TEMP = TEMPDIR; -- inform make about the temporary storage location.
+CFLAGS    = "-pipe";
 --
 -----------------------------------------------------------------------------------------------
 --
 -- Dont use "luajit20" and "lua51" makefiles at the same time!
 -- luajit acts as a replacement for lua51.
-make "luajit20"
+--make "luajit20"
 --make "lua51"
-make "modules"
+--make "modules"
 --
-make "lua52"
-make "modules"
+--make "lua52"
+--make "modules"
 --
 make "lua53"
 make "modules"

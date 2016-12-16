@@ -1,7 +1,7 @@
 --- makefile for omm.
 -- statically linked, self contained lua executable
 if not WINDOWS then quit("We are not running on Windows?") end;
---
+-- 
 -----------------------------------------------------------------------------------------------
 --
 LUAROOT = LUAROOT or PWD
@@ -12,12 +12,12 @@ include "luastrip"
 include "luaglue"
 
 local OMM = {
-  -- glue stripped lua source to mk.exe
-  luaglue{"mk", odir=LUA_BIN, loader="mk.exe", force=true, 
-          inputs=luastrip{src="mk.lua", odir=TEMPDIR}
+  -- glue stripped lua source to runtime
+  luaglue{"omm", odir=LUA_BIN, loader="glueOMM.exe", force=true, 
+          inputs=luastrip{src="omm.lua", odir=TEMPDIR}
          },
   -- copy include files into Lua's package.path
-  file.copy{src="*.mki", odir=LUA_BIN.."/lua"}
+  file.copy{src="*.omi", odir=LUA_BIN.."/lua"}
 }
 
 target("omm", OMM)

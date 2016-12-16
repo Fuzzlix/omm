@@ -1,0 +1,72 @@
+--
+local insert, remove = table.insert, table.remove;
+--
+if not make.utils.which("svn"..make.utils.choose(WINDOWS, ".exe", "")) then 
+  warning("'svn' not found in path.");
+  return; 
+end;
+--
+svn = make.newTool();
+--
+local dirlist = {};
+function svn:action_checkout(...)
+  local par = self:checkParam(...);
+  local dir, url;
+  if par.odir then
+    dir = par.odir;
+    par.odir = nil;
+  else
+    dir = par[1];
+    remove(par, 1);
+  end;
+  if dirlist[dir] then return; end; -- alredy checked out
+  if par.url and not par.src then 
+    par.src = par.url;
+    par.url = nil;
+  end;
+  if par.src then
+    url = par.src;
+    par.src = nil;
+  else
+    url = par[1];
+    remove(par, 1);
+  end;
+  if type(dir) ~= "string" then quitMF("no valid odir given."); end;
+  local fnx = dir..".svn";
+  if not make.options.forcescheckout then
+    if type(url) ~= "string" then quitMF("no valid url given."); end;
+    if make.utils.exists(dir) and not make.utils.isDir(dir) then make.quitMF("cant overwrite '%s'.", dir); end;
+    local filetime_delta = os.time() - make.utils.filetime(fnx);
+    if filetime_delta < 86400 and make.utils.exists(dir) then return; end; -- checkout at least 24 hours old ?
+  end;
+  local cmd = "svn checkout " .. url .. " " .. dir;
+  if make.options.verbose then
+    print(cmd);
+  elseif not make.options.quiet then
+    print("SVN-CO "..url);
+  end;
+  
+  if not make.utils.execute(cmd, make.options.quiet) then
+    quitMF("svn checkout failed.");
+  else 
+    dirlist[dir] = true;
+    local f = io.open(fnx,"w+");
+    if f then
+      f:write(("%s checked out with:\n%s ."):format(dir, cmd));
+      f:close();
+    end;
+  end;
+end;
+svn:add_action("checkout");
+--
+-- add toolchain specific commandline switches
+local cmdl = require "Cmdl";
+insert(cmdl.argsd,
+  { tag = "forcescheckout", 
+    cmd = {'-fc', "--force-checkout"}, 
+    descr = "force all svn checkouts. (default: every 24 hours)",
+    blockedby = {"printhelp", "printversion"},
+  }
+);
+--
+return tc;

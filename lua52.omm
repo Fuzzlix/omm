@@ -21,7 +21,7 @@ local lua_core = "\z
   lauxlib lbaselib lbitlib lcorolib ldblib liolib \z
   lmathlib loslib lstrlib ltablib loadlib linit"
 
-if not make.path.isDir("lua-5.2") then
+if not make.utils.isDir("lua-5.2") then
   svn.checkout{"lua-5.2", "https://github.com/Fuzzlix/lua5/branches/52"}
 end
 --

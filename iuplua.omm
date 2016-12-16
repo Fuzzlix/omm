@@ -2,20 +2,21 @@
 --
 if not WINDOWS then quit("We are not running on Windows?") end;
 --
-LUAROOT = LUAROOT or PWD
-LUA_BIN = LUA_BIN or LUAROOT.."/bin" -- install dir
-TEMPDIR = TEMPDIR or LUAROOT.."/tmp" -- dir for intermediate files
+LUAROOT  = LUAROOT or PWD
+LUA_BIN  = LUA_BIN or LUAROOT.."/bin" -- install dir
+TEMPDIR  = TEMPDIR or LUAROOT.."/tmp" -- dir for intermediate files
 --
-IUPROOT = LUAROOT.."/iuplua"
-IUPBIN  = LUA_BIN
+IUPROOT  = LUAROOT.."/iuplua"
+IUPBIN   = LUA_BIN
 --
+if svn then svn.checkout{"iuplua", "svn://svn.code.sf.net/p/iup/iup/trunk/iup"}; end;
 local LUAVER  = make.Needs"lua".LUAVERSION
---svn checkout svn://svn.code.sf.net/p/iup/iup/trunk/iup iup
-if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
-  if make.path.isDir("iuplua") then -- module iuplua
+if not make.Targets("iuplua"..LUAVER) then -- iuplua
+  if make.utils.isDir("iuplua") then 
     --
     local TEMPDIR = TEMPDIR.."/"..LUAVER
-    local DLIBO;
+    local LUA_IDIR = LUA_BIN.."/include/" .. LUAVER
+    local DLIBO, SLIBO;
     do -- iup
       local SRC = "iup_array.c iup_callback.c iup_dlglist.c iup_attrib.c iup_focus.c iup_font.c \z
                    iup_globalattrib.c iup_object.c iup_key.c iup_layout.c iup_ledlex.c iup_names.c \z
@@ -29,7 +30,7 @@ if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
                    iup_sbox.c iup_scrollbox.c iup_normalizer.c iup_tree.c iup_split.c iup_layoutdlg.c \z
                    iup_recplay.c iup_progressdlg.c iup_expander.c iup_open.c iup_table.c iup_canvas.c \z
                    iup_gridbox.c iup_detachbox.c iup_backgroundbox.c iup_linefile.c iup_config.c \z
-                   iup_flatbutton.c iup_flatframe.c iup_animatedlabel.c iup_draw.c \z
+                   iup_flatbutton.c iup_flatframe.c iup_flattabs.c iup_animatedlabel.c iup_draw.c \z
                    win/iupwin_common.c win/iupwin_brush.c win/iupwin_focus.c win/iupwin_font.c \z
                    win/iupwin_globalattrib.c win/iupwin_handle.c win/iupwin_key.c win/iupwin_str.c \z
                    win/iupwin_loop.c win/iupwin_open.c win/iupwin_tips.c win/iupwin_info.c \z
@@ -40,15 +41,20 @@ if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
                    win/iupwin_progressbar.c win/iupwin_text.c win/iupwin_val.c win/iupwin_touch.c \z
                    win/iupwin_tabs.c win/iupwin_menu.c win/iupwin_list.c win/iupwin_tree.c \z
                    win/iupwin_calendar.c win/iupwin_datepick.c \z
-                   win/iupwindows_main.c win/iupwindows_help.c win/iupwindows_info.c"
-      local DEFINES  = "_WIN32_WINNT=0x0501 _WIN32_IE=0x600 WINVER=0x0501 NOTREEVIEW UNICODE IUP_DLL"
-      if make.get_flag("DEBUG") then 
+                   win/iupwindows_nomain.c win/iupwindows_help.c win/iupwindows_info.c"
+      local DEFINES  = "_WIN32_WINNT=0x0501 _WIN32_IE=0x600 WINVER=0x0501 NOTREEVIEW UNICODE"
+      if DEBUG then 
         DEFINES = DEFINES .. " IUP_ASSERT"
       end
       local SRCDIR   = IUPROOT.. "/src"
       local INCLUDES = ". ../include win ../etc"
       local NEEDS    = "windows"
-      DLIBO = c99 {"iup", 
+      SLIBO = c99 {"iup_s", 
+        src=SRC, base=SRCDIR, odir=TEMPDIR, incdir=INCLUDES, 
+        defines=DEFINES, cflags=CFLAGS, needs=NEEDS
+        }
+      DEFINES  = DEFINES.." IUP_DLL"
+      DLIBO = c99 {"iup_d", 
         src=SRC, base=SRCDIR, odir=TEMPDIR, incdir=INCLUDES, 
         defines=DEFINES, cflags=CFLAGS, needs=NEEDS
         }
@@ -60,7 +66,6 @@ if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
     local LUA_CDIR = LUA_BIN.."/lib/"..LUAVER
     local SRCDIR   = IUPROOT.."/srclua5"
     local INCLUDES = TEMPDIR.." . ../include ../src"
-    local NEEDS    = "lua windows"
     local DEFINES  = "IUPLUA_USELH"
     --
     local CTRL    = "button canvas dialog colordlg clipboard filedlg fill frame hbox normalizer gridbox \z
@@ -80,13 +85,17 @@ if not make.Targets("iuplua"..LUAVER) then -- iuplua-3.19.1
                      iuplua_getparam.c iuplua_getcolor.c iuplua_config.c " .. 
                      addprefix("elem/il_", addsuffix( ".c", CTRL))
     --
-    local DLIBOBJ = c99 {"iuplua"..LUAVER, src=SRC, base=SRCDIR, odir=TEMPDIR, incdir=INCLUDES, 
-                         defines=DEFINES, cflags=CFLAGS, needs=NEEDS, deps=CTRLH -- deps defined here explicit, because automatic ..
+    local DLIBOBJ = c99 {"iuplua_d"..LUAVER, src=SRC, base=SRCDIR, odir=TEMPDIR, incdir=INCLUDES, 
+                         defines=DEFINES, cflags=CFLAGS, needs="lua windows", includes=CTRLH -- includes defined here explicit, because automatic ..
                         }                                                        -- include file checks do not work for generated files (yet).
-    local DLIB    = c99.shared {"iuplua"..LUAVER, inputs={DLIBO,DLIBOBJ}, odir=LUA_CDIR, cflags=CFLAGS, needs=NEEDS}
+    local SLIBOBJ = c99 {"iuplua_s"..LUAVER, src=SRC, base=SRCDIR, odir=TEMPDIR, incdir=INCLUDES, 
+                         defines=DEFINES, cflags=CFLAGS, needs="luas windows", includes=CTRLH -- includes defined here explicit, because automatic ..
+                        }                                                        -- include file checks do not work for generated files (yet).
+    local DLIB    = c99.shared {"iuplua"..LUAVER, inputs={DLIBO,DLIBOBJ}, odir=LUA_CDIR, cflags=CFLAGS, needs="lua windows"}
+    local SLIB    = c99.library {"iuplua"..LUAVER, inputs={SLIBO,SLIBOBJ}, odir=LUA_IDIR, cflags=CFLAGS, needs="luas windows"}
     --
-    target("iuplua"..LUAVER, DLIB)
-    default{DLIB}
+    target("iuplua"..LUAVER, {DLIB, SLIB})
+    default{DLIB, SLIB}
     --
   end;
 end;

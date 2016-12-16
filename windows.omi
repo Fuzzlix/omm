@@ -1,0 +1,7 @@
+--
+if not make.Needs"windows" then 
+  define_need{ "windows", 
+    libs = 'kernel32 user32 gdi32 winspool comdlg32 advapi32 shell32 uuid oleaut32 ole32 comctl32 psapi mpr',
+  };
+end;
+--

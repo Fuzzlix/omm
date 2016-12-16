@@ -1,0 +1,74 @@
+--
+-- gnu toolchain - 32bit targets.
+--
+M64 = true;
+OPTIMIZE = OPTIMIZE or "O2";
+--
+local choose     = make.utils.choose;
+local WINDOWS    = make.WINDOWS;
+--
+cc = make.newTool{
+  SRC_EXT      = ".c",
+  CMD          = "CC",
+  PROG         = "gcc",
+  OBJ_EXT      = ".o",
+  EXE_EXT      = choose(WINDOWS, ".exe", ""),
+  DLL_EXT      = choose(WINDOWS, ".dll", ".so"),
+  LIB_EXT      = ".a",
+  SW_DEPGEN    = "-MMD",
+  command_obj  = "$PREFIX$PROG$SUFFIX $OPTIMIZE -c -m64 $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
+  command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+  command_slib = "$PREFIXgcc-ar rcus $OUTFILE $SOURCES",
+  command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+};
+cc:add_group();
+cc:add_program();
+cc:add_shared();
+cc:add_library();
+--
+c99 = make.newTool{
+  SRC_EXT      = ".c",
+  OBJ_EXT      = ".o",
+  EXE_EXT      = choose(WINDOWS, ".exe", ""),
+  DLL_EXT      = choose(WINDOWS, ".dll", ".so"),
+  LIB_EXT      = ".a",
+  CMD          = "C99",
+  PROG         = "gcc",
+  SW_DEPGEN    = "-MMD",
+  command_obj  = "$PREFIX$PROG$SUFFIX -std=gnu99 $OPTIMIZE -c -m64 $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
+  command_dlib = "$PREFIX$PROG$SUFFIX -std=gnu99 $OPTIMIZE -shared -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+  command_slib = "$PREFIXgcc-ar rcus $OUTFILE $SOURCES",
+  command      = "$PREFIX$PROG$SUFFIX -std=gnu99 $OPTIMIZE -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+};
+c99:add_group();
+c99:add_program();
+c99:add_shared();
+c99:add_library();
+--
+cpp = make.newTool{
+  SRC_EXT      = ".cpp .cxx .C",
+  OBJ_EXT      = ".o",
+  EXE_EXT      = choose(WINDOWS, ".exe", ""),
+  DLL_EXT      = choose(WINDOWS, ".dll", ".so"),
+  LIB_EXT      = ".a",
+  CMD          = "CPP",
+  PROG         = "g++",
+  SW_DEPGEN    = "-MMD",
+  command_obj  = "$PREFIX$PROG$SUFFIX $OPTIMIZE -c -m64 $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
+  command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+  command_slib = "$PREFIXgcc-ar rcus $OUTFILE $SOURCES",
+  command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+};
+cpp:add_group();
+cpp:add_program();
+cpp:add_shared();
+cpp:add_library();
+--
+wresource = make.newTool{
+  SRC_EXT   = ".rc",
+  OBJ_EXT   = ".o",
+  CMD       = "RES",
+  command   = "windres -F pe-x86-64 $OPTIONS $SOURCES $DEFINES -o $OUTFILE",
+};
+wresource:add_group();
+--

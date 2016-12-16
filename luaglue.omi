@@ -49,7 +49,8 @@ if luaglue == nil then -- not loaded yet?
       if not ifile then return nil, "error: cant open '" .. par.source .. "'."; end;
       local luafile = ifile:read("*a");
       ifile:close();
-      local ofile = io.open(par.outfile, "wb");
+      os.remove(par.outfile);
+      local ofile = io.open(par.outfile, "w+b");
       if ofile then
         return ofile:write(stub, luafile, GLUESIG, linteger(#stub), linteger(#luafile)) and ofile:close() and true or nil,
                "error: cant write to '" .. par.outfile .. "'.";

@@ -1,0 +1,10 @@
+--- makefile for lua-modules
+--
+make "lfs"
+make "lpeg"
+make "winapi"
+--make "lsqlite3"
+--make "luasocket"
+--make "penlight"
+--make "lanes"
+--make "iuplua"

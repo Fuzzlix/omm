@@ -1,0 +1,51 @@
+--- makefile for lua-module luasocket
+--
+if not WINDOWS then quit("We are not running on Windows?") end;
+--
+-----------------------------------------------------------------------------------------------
+--
+LUAROOT = LUAROOT or PWD
+LUA_BIN = LUA_BIN or LUAROOT.."/bin" -- install dir
+TEMPDIR = TEMPDIR or LUAROOT.."/tmp" -- dir for intermediate files
+--
+local LUAVER     = make.Needs"lua".LUAVERSION
+local TEMPDIR    = TEMPDIR .. "/lua" .. LUAVER
+local MODULES    = LUAROOT
+local LUA_ETCDIR = LUA_BIN.."/etc"
+local LUA_IDIR   = LUA_BIN.."/include/" .. LUAVER
+local LUA_CDIR   = LUA_BIN.."/lib/" .. LUAVER
+local LUA_LDIR   = LUA_BIN.."/lua"
+
+if svn then svn.checkout{"luasocket", "https://github.com/diegonehab/luasocket/trunk"}; end;
+if make.utils.isDir("luasocket") then -- module luasocket
+  -- [[
+  local MODULE  = MODULES.."/luasocket"
+  local SRCDIR  = MODULE.."/src"
+  local SOCT_C  = "luasocket wsocket timeout buffer io auxiliar options inet except select tcp udp compat"
+  local MIME_C  = "mime"
+  local DEFINES  = "NDEBUG LUASOCKET_INET_PTON WINVER=0x0502"
+  --
+  local SOCTS_C = c99 {"luasocket_s", src=SOCT_C, defines=DEFINES ,base=SRCDIR, odir=TEMPDIR, needs="luas", cflags=CFLAGS}
+  local SOCTD_C = c99 {"luasocket",   src=SOCT_C, defines=DEFINES ,base=SRCDIR, odir=TEMPDIR, needs="lua windows", cflags=CFLAGS}
+  local MIMES_C = c99 {"luasocket_s", src=MIME_C, defines=DEFINES ,base=SRCDIR, odir=TEMPDIR, needs="luas", cflags=CFLAGS}
+  local MIMED_C = c99 {"luasocket",   src=MIME_C, defines=DEFINES ,base=SRCDIR, odir=TEMPDIR, needs="lua windows", cflags=CFLAGS}
+  --
+  local SOCTSLIB= c99.library {'socket_core'..LUAVER, odir=LUA_IDIR, inputs=SOCTS_C, needs="luas"}           
+  local SOCTSDLL= c99.shared  {'socket/core'..LUAVER, odir=LUA_CDIR, inputs=SOCTD_C, needs="lua", libs="ws2_32", cflags=CFLAGS} 
+  local MIMELIB = c99.library {'mime_core'..LUAVER,   odir=LUA_IDIR, inputs=MIMES_C, needs="luas"}
+  local MIMEDLL = c99.shared  {'mime/core'..LUAVER,   odir=LUA_CDIR, inputs={MIMED_C, SOCTSDLL}, needs="lua", cflags=CFLAGS}
+  --
+  local MODLUA1 = file {src="socket mime ltn12",            ext=".lua", base=SRCDIR, odir=LUA_CDIR}
+  local MODLUA2 = file {src="ftp headers http smtp tp url", ext=".lua", base=SRCDIR, odir=LUA_CDIR.."/socket"}
+  local MODLUA  = group {MODLUA1, MODLUA2}
+  local MODBIN  = group {SOCTSLIB, SOCTSDLL, MIMELIB, MIMEDLL, MODLUA}
+  target("luasocket"..LUAVER, MODBIN)
+  default(MODBIN)
+  --
+  if not make.Targets "luasocket_doc" then
+    local MODDOC  = file {src="doc/* etc/* samples/* test/*", base=MODULE, odir=LUA_ETCDIR.."/luasocket"}
+    target("luasocket_doc", MODDOC)
+    default{MODDOC}
+  end;
+  --]]
+end; 

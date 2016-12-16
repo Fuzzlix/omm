@@ -1,7 +1,7 @@
 #One More Maketool. A lua based extensible build engine.
 
-OMM is a lua make tool very similiar to [lake][]. Its goal is a simpler 
-and cleaned up syntax, extensibility, portability between different lua 
+OMM is a lua make tool inspired by [lake][]. Its goal is a simpler 
+and cleaner syntax, extensibility, portability between different lua 
 versions and operating systems. The multitreading is improved compared to 
 [lake][]. All makefiles become executed in one and the same sandbox 
 environment.  

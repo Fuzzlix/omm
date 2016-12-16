@@ -193,8 +193,8 @@ cc.program {"hello", src="hello", base="src", odir="bin"}
 | __defines__ | _stringlist_    | a list of defines.                                                                                         |
 | __needs__   | _stringlist_    | a list of needs to pull parameters from and use them in addition.                                          |
 | __from__    | _string_        | pull parameters from a need. e.g: `from="lua:cflags,defines"` reads the fields `cflags` and `defines` from the need "lua" and uses it in addition to all given parameters.|
-| __inputs__  | _MaketreeNode_ | Other MaketreeNodes used as sources for compilation.                                                        |
-| __deps__    | _MaketreeNode_ | Other MaketreeNodes needs to be built before this node. Unlike `"inputs"`, those nodes do not become part of the generated command line |
+| __inputs__  | _MaketreeNode_  | Other MaketreeNodes used as sources for compilation. Non existend temporary files will be ignored in dirtyness checks. |
+| __deps__    | _MaketreeNode_  | Other MaketreeNodes needs to be built before this node. Unlike `"inputs"`, those nodes do not become part of the generated command line. Non existend temporary files will be ignored in dirtyness checks. |
 
 ### aditional parameters unterstood by rule:
 
