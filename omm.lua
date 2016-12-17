@@ -1752,10 +1752,10 @@ do
     local depfile = fn_forceExt(self[1], ".d");
     if self:exists() then 
       if not Make.options.quiet then print("DELETE " .. fn_canonical(self[1])); end;
-      os.remove(self[1]);
+      if not Make.options.dont_execute then os.remove(self[1]); end;
       if fn_exists(depfile) then
         if not Make.options.quiet then print("DELETE " .. fn_canonical(depfile)); end;
-        os.remove(depfile);
+        if not Make.options.dont_execute then os.remove(depfile); end;
       end;
     end;
   end;
@@ -2012,7 +2012,9 @@ do -- [make pass 2 + 3] =====================================================
         if node == nil then return; end;
         if not node.bP22NeedsBuild and not always_make then node.done = true; end;
         if node.done then return; end;
-        if node:is("TreeNode") then 
+        if node:is("Target") and node.bForce then 
+          node:action(); 
+        elseif node:is("TreeNode") then 
           if node.bP22NeedsBuild or always_make then
             nodesdone = nodesdone + 1;
             -- construct command line
