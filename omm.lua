@@ -1491,7 +1491,7 @@ do
       end;
       if node == nil or node:is("SourceFile") then return; end;
       needIMs = needIMs or node.bP21NeedsBuild;
-      node.bP22NeedsBuild = needIMs and not node.bClean or buildAll;
+      node.bP22NeedsBuild = needIMs and not node.bClean or node.bForce or buildAll;
       lvl = lvl or 1;
       if not node:is("TargetList Target") or node.action then
         lvl = lvl + 1;
@@ -1523,7 +1523,11 @@ do
       if node:is("TargetList") then
         for t in node() do deduceLvl(t, buildAll, lvl, needIMs); end;
       elseif node:is("Target") then
-        deduceLvl(node.deps, buildAll, lvl, needIMs);
+        if node.action and node.bDirty then
+          remember(node);
+        else
+          deduceLvl(node.deps, buildAll, lvl, needIMs);
+        end;
       elseif node:is("GeneratedFile") then
         if node.bP22NeedsBuild then
           remember(node);
@@ -1590,14 +1594,14 @@ do
     if class(deps, self.deps.__allowed) then 
       if not self.deps:find(deps[1]) then
         self.deps:add(deps);
-        deps.target = self;
+        deps.target = true;
       else
         quitMF(("cant overwrite value '%s'"):format(deps[1]));
       end;
     elseif type(deps) == "table" then  
       for _, v in ipairs(deps) do 
-        self.deps:add(v);
-        v.target = self;
+        self.deps:add(v, true);
+        v.target = true;
       end;
     else
       quitMF("parameter needs to be a object or a list of objects.");
@@ -1609,7 +1613,7 @@ do
     --dprint("clTarget.needsBuild():                   %s =>", self[1]);
     local dirty, modtime = false, -1;
     if self.deps then dirty, modtime = self.deps:needsBuild(); end;
-    self.bDirty   = dirty;
+    self.bDirty   = self.bForce or self.bDirty or dirty;
     self._nodeTime   = modtime;
     self.bP21Done = true;
     --dprint("clTarget.needsBuild():             %s %s", self.bDirty and "DIRTY" or "clean", self[1]);
@@ -1628,7 +1632,7 @@ do
       if self.deps then insert(tStr,("deps:%s"):format(#self.deps)); end;
       if self.bDirty then insert(tStr,"Dirty"); end;
       if self.bClean then insert(tStr,"Clean"); end;
-      if self.bIntermediate then insert(tStr,"Intermediate"); end;
+      if self.target then insert(tStr,"Target"); end;
       return concat(tStr, ", ");
     end,
   });
@@ -1690,7 +1694,9 @@ do
     if self.bP21Done then return self.bDirty, self._nodeTime, not self.bDirty; end;
     local time = self:getFiletime();
     local dirty, modtime = false, -1;
-    if self.deps then dirty, modtime = self.deps:needsBuild(); end;
+    if self.deps then 
+      dirty, modtime = self.deps:needsBuild(); 
+    end;
     self._nodeTime = max(time or -1, modtime or -1);
     self.bDirty = dirty or (time < self._nodeTime);
     self.bP21Done = true;
@@ -1701,7 +1707,6 @@ do
   clGeneratedFile = clFile:subclass("GeneratedFile", {
     init = function(self, ...) -- ([<path>,]* filename)
       clGeneratedFile.super.init(self, ...);
-      self.bIntermediate = Make.TEMP and self[1]:match("^"..Make.TEMP) and true;
       GeneratedFiles:add(self);
       return self;
     end,
@@ -1730,7 +1735,7 @@ do
     self._nodeTime = max(fileTime, depTime, preTime, needsTime);
     dirty = dirty or depsDirty or presDirty or needsDirty or (fileTime < self._nodeTime);
     self.bClean = clean and depsClean and needsClean and fileTime >= self._nodeTime;
-    self.bP21NeedsBuild = dirty and not self.bIntermediate or false;
+    self.bP21NeedsBuild = dirty and self.target or false;
     self.bP21Done = true;
     --[[-- debug output
     dprint("clGeneratedFile.needsBuild():      %s %s => %s, %s", 
@@ -1779,7 +1784,7 @@ do
     return self;
   end;
 
-  clTargetList.add               = function(self, item)
+  clTargetList.add               = function(self, item, isTarget)
     local kf = self.__key or 1;
     if class(item, self.__allowed) then 
       if not self.__dir[item[kf]] then
@@ -1795,6 +1800,7 @@ do
     elseif type(item) == "table" then  
       for _, v in ipairs(item) do 
         self:add(v); 
+        if isTarget then v.target = true; end;
       end;
     else
       error("parameter needs to be a object or a list of objects.", 2);
@@ -1872,7 +1878,7 @@ do
   clMakeScript.default = default;
   clMakeScript.target  = target;
   --
-  clMake.Tempfiles = GeneratedFiles;
+  --clMake.Tempfiles = GeneratedFiles;
   clMake.Targets   = Targets;
   --
 end;
@@ -1964,7 +1970,7 @@ do -- [make pass 2 + 3] =====================================================
     local function getTarget()
       if targets == nil then
         if not Targets:find("default") then
-          for node in Make.Tempfiles() do
+          for node in GeneratedFiles() do
             if node.type == "prog" or node.type == "slib" or node.type == "dlib" then 
               MakeScript.default(node); 
             end;
@@ -2079,10 +2085,6 @@ do -- [make pass 2 + 3] =====================================================
       if not quiet then print("TARGET " .. target[1]); end;
       if needsBuild(target) then makeNode(target); end;
       target = getTarget();
-    end;
-    --
-    if Make.options.export_needs then
-      Needs:export(Make.options.export_needs)
     end;
   end;
   --
@@ -2852,7 +2854,7 @@ do -- [tools] ===============================================================
         end;
       end;
     else
-      result = Make.Targets:new_generatedfile(par.odir, par[1]);
+      result = Targets:new_generatedfile(par.odir, par[1]);
       result.deps          = src;
       result.defines       = src.defines;
       result.cflags        = src.cflags;
@@ -2918,17 +2920,17 @@ end;
 do -- [special targets] =====================================================
   --
   local function action_clean(self)
-    for f in Make.Tempfiles() do
+    for f in GeneratedFiles() do
       if not f.target then f:delete(); end;
     end;
   end;
 
   local function action_CLEAN(self)
-    Make.Tempfiles:delete();
+    GeneratedFiles:delete();
   end;
   --
-  Make.Targets:new_target("clean",{action = action_clean}).dirty = true; -- allways execute
-  Make.Targets:new_target("CLEAN",{action = action_CLEAN}).dirty = true; -- allways execute
+  Targets:new_target("clean",{action = action_clean}).bForce = true; -- allways execute
+  Targets:new_target("CLEAN",{action = action_CLEAN}).bForce = true; -- allways execute
   --
 end;
 --
