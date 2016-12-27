@@ -8,8 +8,8 @@ LUAROOT = LUAROOT or PWD
 LUA_BIN = LUA_BIN or LUAROOT.."/bin" -- install dir
 TEMPDIR = TEMPDIR or LUAROOT.."/tmp" -- dir for intermediate files
 --
-local LUAVER     = make.Needs"lua".LUAVERSION
-local TEMPDIR    = TEMPDIR .. "/lua" .. LUAVER
+local LUAVER     = make.Needs"lua" and make.Needs"lua".LUAVERSION or make.LUAVERSION
+local TEMPDIR    = TEMPDIR.."/"..LUAVER
 local MODULES    = LUAROOT
 local LUA_ETCDIR = LUA_BIN.."/etc"
 local LUA_IDIR   = LUA_BIN.."/include/" .. LUAVER
@@ -20,13 +20,13 @@ if svn then svn.checkout{"winapi", "https://github.com/Fuzzlix/winapi/trunk"}; e
 if make.utils.isDir("winapi") then -- module winapi
   -- [[
   local MODULES = MODULES.."/winapi"
-  local MODS_C  = c99.group   {"winapi_s", src="winapi wutils", base=MODULES, odir=TEMPDIR, defines='PSAPI_VERSION=1', needs="luas", cflags=CFLAGS}  
-  local MODD_C  = c99.group   {"winapi",   src="winapi wutils", base=MODULES, odir=TEMPDIR, defines='PSAPI_VERSION=1', needs="lua", cflags=CFLAGS}
+  local MODS_C  = c99 {"winapis_*", src="winapi wutils", base=MODULES, odir=TEMPDIR, defines='PSAPI_VERSION=1', needs="luas", cflags=CFLAGS}  
+  local MODD_C  = c99 {"winapid_*",   src="winapi wutils", base=MODULES, odir=TEMPDIR, defines='PSAPI_VERSION=1', needs="lua", cflags=CFLAGS}
   --
-  local MODLIB  = c99.library {'winapi'..LUAVER, odir=LUA_IDIR, inputs={MODS_C}, needs="luas windows", cflags=CFLAGS}
+  local MODLIB  = c99.slib {'winapi'..LUAVER, odir=LUA_IDIR, inputs={MODS_C}, needs="luas windows", cflags=CFLAGS}
   target("winapi", MODLIB)
   default(MODLIB)
-  local MODDLL  = c99.shared  {'winapi'..LUAVER, odir=LUA_CDIR, inputs={MODD_C}, needs="lua windows", cflags=CFLAGS}
+  local MODDLL  = c99.dlib  {'winapi'..LUAVER, odir=LUA_CDIR, inputs={MODD_C}, needs="lua windows", cflags=CFLAGS}
   target("winapi"..LUAVER, MODDLL)
   default(MODDLL)
   --if not LUAMODS_DOC_COPIED then

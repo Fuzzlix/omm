@@ -134,15 +134,15 @@ and is not comfortable. Therefore the are handy tools ready to allow simpler mak
 The first one is the `rule.define()` _action_[^action]. This one creates a new _action_ but a _node_[^node]. 
 The generated _action_ includes all parameters given to `rule.define()` as a set of predefined parameter values.
 When using the generated _action_, the predefined parameters will be taken into account. 
-Some template parameters will be used if this parameter is ommittet. (`base`, `odir`, `ext`, `type`, `prog`)
+Some template parameters will be used if this parameter is ommittet. (`base`, `odir`, `ext`, `typ`, `prog`)
 Some template parameters will be used in addition to the given parameters. (`src`, `defines`, `cflags`, `incdir`, `libdir`, `libs`, `needs`, `from`, `deps`)
 
 ```lua
 -- example_07.mk
-compile = rule.define {odir="tmp", base="src", cflags="-O2", type="obj",
+compile = rule.define {odir="tmp", base="src", cflags="-O2", typ="obj",
                        action="gcc -c $OPTIONS $SOURCES -o $OUTFILE"
                       }
-link    = rule.define {odir="bin", type="prog",
+link    = rule.define {odir="bin", typ="prog",
                        action="gcc $OPTIONS $SOURCES -o $OUTFILE"
                       }
 NODE_OBJ = compile {"hello.o", src="hello.c"}

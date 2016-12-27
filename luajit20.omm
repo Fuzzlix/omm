@@ -15,7 +15,7 @@ local LUA_LDIR     = LUA_BIN.."/lua"                   -- dir for lua modules
 local LUA_ETC_DIR  = LUA_BIN.."/etc"                   -- dir for documentation, tests, etc.
 local JIT_SRC_DIR  = LUAROOT.."/luaJIT20/src"          -- where are the lua sources.
 local JIT_HOSTDIR  = JIT_SRC_DIR.."/host"
-
+local TEMPDIR      = TEMPDIR.."/"..LUA_VERSION
 local CFLAGS       = CFLAGS .. " -fomit-frame-pointer"
 if M32 then CFLAGS = CFLAGS .. " -march=i686" end
 
@@ -24,52 +24,59 @@ if not make.utils.isDir("luaJIT20") and svn then
 end
 --
 local MINILUA = make.utils.which("luajit") or 
-                c99.program {TEMPDIR.."/minilua", src="minilua.c", base=JIT_HOSTDIR, incdir=JIT_SRC_DIR};
-local ARCHH   = rule {TEMPDIR.."/buildvm_arch.h", prog=MINILUA,
-                      script="luaJIT20/dynasm/dynasm.lua", dasc="luaJIT20/src/vm_x86.dasc",
-                      flag=M32 and "" or "-D P64",
-                      action = "$PROG $SCRIPT $FLAG -D JIT -D FFI -D FPU -D HFABI -D VER= -D WIN -o $OUTFILE $DASC", 
-                     };
-local BUILDVM = c99.program {TEMPDIR.."/buildvm", 
-                             src="buildvm buildvm_asm buildvm_peobj buildvm_lib buildvm_fold", 
-                             base=JIT_HOSTDIR, incdir={JIT_SRC_DIR, TEMPDIR}, needs=ARCHH,
-                             defines="LJ_ARCH_HASFPU=1 LJ_ABI_SOFTFP=0 LUAJIT_TARGET=LUAJIT_ARCH_"..
-                               (M32 and "x86" or "x64")
-                            };
-local LJ_VM   = rule {TEMPDIR.."/lj_vm.o", prog=BUILDVM,
-                      action = "$PROG -m peobj -o $OUTFILE"
-                     };
+  c99.prog {"minilua", src="minilua.c", base=JIT_HOSTDIR, odir=TEMPDIR, incdir=JIT_SRC_DIR};
+
+local ARCHH   = rule {"buildvm_arch.h", prog=MINILUA, odir=TEMPDIR, 
+  script="luaJIT20/dynasm/dynasm.lua", 
+  dasc="luaJIT20/src/vm_x86.dasc",
+  flag=M32 and "" or "-D P64",
+  action = "$PROG $SCRIPT $FLAG -D JIT -D FFI -D FPU -D HFABI -D VER= -D WIN -o $OUTFILE $DASC"
+};
+local BUILDVM = c99.prog {"buildvm", odir=TEMPDIR, 
+  src="buildvm buildvm_asm buildvm_peobj buildvm_lib buildvm_fold", 
+  base=JIT_HOSTDIR, incdir={JIT_SRC_DIR, TEMPDIR}, needs=ARCHH,
+  defines="LJ_ARCH_HASFPU=1 LJ_ABI_SOFTFP=0 LUAJIT_TARGET=LUAJIT_ARCH_"..(M32 and "x86" or "x64")
+};
+local LJ_VM   = rule {"lj_vm.o", prog=BUILDVM, odir=TEMPDIR,
+  action = "$PROG -m peobj -o $OUTFILE"
+};
 local gendefh = rule.define {base=JIT_SRC_DIR, odir=TEMPDIR, prog=BUILDVM,
-                             src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c \z
-                                  lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                             action = "$PROG -m $MODE -o $OUTFILE $SOURCES"
-                            };
+  src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c \z
+      lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
+  action = "$PROG -m $MODE -o $OUTFILE $SOURCES"
+};
 local FFDEF   = gendefh {"lj_ffdef.h",  mode="ffdef" }
 local BCDEF   = gendefh {"lj_bcdef.h",  mode="bcdef" }
 local RECDEF  = gendefh {"lj_recdef.h", mode="recdef"}
 local LIBDEF  = gendefh {"lj_libdef.h", mode="libdef"}
 
-local FOLDDEF = rule {TEMPDIR.."/lj_folddef.h", base=JIT_SRC_DIR, prog=BUILDVM,
-                      src="lj_opt_fold.c", 
-                      action = "$PROG -m folddef -o $OUTFILE $SOURCES"
-                     }
+local FOLDDEF = rule {"lj_folddef.h", base=JIT_SRC_DIR, prog=BUILDVM, odir=TEMPDIR,
+  src="lj_opt_fold.c", 
+  action = "$PROG -m folddef -o $OUTFILE $SOURCES"
+}
 local LJDEPS  = group {FFDEF, BCDEF, RECDEF, LIBDEF, FOLDDEF}
-local VMDEF   = rule {TEMPDIR.."/vmdef.lua", base=JIT_SRC_DIR, prog=BUILDVM,
-                      src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c \z
-                           lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
-                      action = "$PROG -m vmdef -o $OUTFILE $SOURCES"
-                     }
+local VMDEF   = rule {"vmdef.lua", base=JIT_SRC_DIR, prog=BUILDVM, odir=TEMPDIR,
+  src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c \z
+      lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
+  action = "$PROG -m vmdef -o $OUTFILE $SOURCES"
+}
 --
-local LUAICON = wresource {"luajit", src="icon", base=JIT_SRC_DIR, odir=TEMPDIR}                                   -- icon resources
-local LUAOBJ  = c99 {"luajit", src="luajit", base=JIT_SRC_DIR, odir=TEMPDIR, from="luajit:defines", cflags=CFLAGS} -- lua program c source
-local DLIBOBJ = c99 {"luajit_d", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR, incdir={TEMPDIR, JIT_SRC_DIR},     -- dynamic lib c source
-                     needs=LJDEPS, from="luajit:defines", cflags=CFLAGS}
-local SLIBOBJ = c99 {"luajit_s", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR, incdir={TEMPDIR, JIT_SRC_DIR},     -- static lib c source
-                     needs=LJDEPS, from="luajits:defines", cflags=CFLAGS}
+local LUAICON = res {"luajiticon", src="icon", base=JIT_SRC_DIR, odir=TEMPDIR}
+local LUAOBJ  = c99 {"luajit", src="luajit", base=JIT_SRC_DIR, odir=TEMPDIR, 
+  from="luajit:defines", cflags=CFLAGS
+}
+local DLIBOBJ = c99 {"luajitd_*", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR, 
+  incdir={TEMPDIR, JIT_SRC_DIR},
+  needs=LJDEPS, from="luajit:defines", cflags=CFLAGS
+}
+local SLIBOBJ = c99 {"luajits_*", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR, 
+  incdir={TEMPDIR, JIT_SRC_DIR},
+  needs=LJDEPS, from="luajits:defines", cflags=CFLAGS
+}
 --
-local LUALIB  = c99.library {'lua51', odir=LUA_IDIR, inputs={SLIBOBJ, LJ_VM}}                            -- static lua runtime lib
-local LUADLL  = c99.shared  {'lua51', odir=LUA_BIN, inputs={DLIBOBJ, LJ_VM}}                             -- dynamic lua runtime lib
-local LUAEXE  = c99.program {'luajit', odir=LUA_BIN, inputs={LUAOBJ, LUAICON, LUADLL}, needs="windows"}  -- lua executable
+local LUALIB  = c99.slib {'lua51', odir=LUA_IDIR, inputs={SLIBOBJ, LJ_VM}}
+local LUADLL  = c99.dlib {'lua51', odir=LUA_BIN, inputs={DLIBOBJ, LJ_VM}}
+local LUAEXE  = c99.prog {'luajit', odir=LUA_BIN, inputs={LUAOBJ, LUAICON, LUADLL}, needs="windows"}
 --
 local LUAINC  = file {src="lua.h luaconf.h lualib.h lauxlib.h", base=JIT_SRC_DIR, odir=LUA_IDIR}
 local LUADOC  = file {src="*", base=JIT_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/luajit/doc"}

@@ -26,10 +26,9 @@ Required 3rd party modules:
 --]]-------------------------------------------------------------------------
 --
 --require "luacov"
---
 --_DEBUG = true;
 --
-local VERSION = "omm 0.6.1-beta\n  A lua based extensible build engine.";
+local VERSION = "omm 0.6.2-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: OMM [options] [target[,...]]
 
@@ -49,10 +48,22 @@ local INCLUDESCRIPTEXT = ".omi";
 --
 -- [] =======================================================================
 --
+local table_sort, io_popen, io_stderr, io_open, os_remove, os_getenv, os_tmpname, os_exit = 
+      table.sort, io.popen, io.stderr, io.open, os.remove, os.getenv, os.tmpname, os.exit;
+local print, concat,       insert,       remove,       max,      min,      tointeger = 
+      print, table.concat, table.insert, table.remove, math.max, math.min, math.tointeger;
+local pairs, ipairs, type, getmetatable, rawget, select, error, os_execute, package =
+      pairs, ipairs, type, getmetatable, rawget, select, error, os.execute, package;
+local pcall, require, loadfile, setmetatable, tonumber, setfenv, debug_getinfo = 
+      pcall, require, loadfile, setmetatable, tonumber, setfenv, debug.getinfo;
+--
+-- [] =======================================================================
+--
 package.preload["33log"]  = function(...) 
   local pairs, ipairs, type, getmetatable, rawget, select =
         pairs, ipairs, type, getmetatable, rawget, select;
-  local insert = table.insert;
+  local setmetatable = setmetatable;
+  local insert       = table.insert;
   
   local classes = {}; -- all classes indexed by her classname.
   
@@ -75,9 +86,7 @@ package.preload["33log"]  = function(...)
   local function copy(src, dst)
     src = src or {}
     dst = dst or {};
-    for k, v in pairs(src) do
-      dst[k] = v;
-    end;
+    for k, v in pairs(src) do dst[k] = v; end;
     return dst;
   end;
    
@@ -226,6 +235,7 @@ package.preload["33log"]  = function(...)
   --
   return class;
 end;
+
 package.preload["33list"] = function(...) 
   local concat, insert, remove = table.concat, table.insert, table.remove;
   local error = error;
@@ -256,9 +266,7 @@ package.preload["33list"] = function(...)
   
   clList.add     = function(self, tbl)
     if type(tbl) == "table" then 
-      for _, v in ipairs(tbl) do
-        insert(self, v);
-      end;
+      for _, v in ipairs(tbl) do insert(self, v); end;
     end;
     return self;
   end;
@@ -275,26 +283,20 @@ package.preload["33list"] = function(...)
   
   clList.find    = function(self, field, value)
     for _, v in ipairs(self) do
-      if v[field] == value then
-        return v;
-      end;
+      if v[field] == value then return v; end;
     end;
   end;
   
   clList.erase   = function(self, l2)
     for _, v in ipairs(l2) do
       local idx = self:index(v);
-      if idx then
-        remove(self, idx);
-      end;
+      if idx then remove(self, idx); end;
     end;
   end;
   
   clList.concat  = function(self, field, sep)
     local res = {};
-    for _, o in ipairs(self) do
-      insert(res, o[field]);
-    end;
+    for _, o in ipairs(self) do insert(res, o[field]); end;
     return concat(res, sep or " ");
   end;
   
@@ -406,7 +408,7 @@ package.preload["33list"] = function(...)
           self.__dir[v] = v;
         end;
       end;
-    else
+    elseif item ~= nil then
       error("clStrList.add(): parameter needs to be a string or a list of strings.", 2);
     end;
     return self;
@@ -422,6 +424,352 @@ package.preload["33list"] = function(...)
   --
   return class;
 end;
+
+package.preload["Cmdl"]   = function(...) 
+  local insert, concat = table.insert, table.concat;
+  local tonumber, table_sort = tonumber, table.sort;
+  
+  local function split(s, re)
+    if type(s) ~= "string" then return s; end;
+    local i1 = 1;
+    local ls = {};
+    re = re or '%s+';
+    while true do
+      local i2, i3 = s:find(re, i1);
+      if not i2 then
+        insert(ls, s:sub(i1));
+        return ls;
+      end;
+      insert(ls, s:sub(i1, i2 - 1));
+      i1 = i3 + 1;
+    end;
+  end;
+  
+  local cmdl = arg or {};
+  
+  --[[ Parse command line parameters.
+  
+   input:   argv, argsd,     
+   default: arg,  cmdl.argsd,
+     argv - array of command line arguments,
+     argsd - array of tables, each table describes a single command, and its fields:
+       tag - short tag used as parameter key in results table,
+       cmd - commands synonyms array e.g. {'-h','--help','/?'},
+       descr - command description (used to generate help text),
+       def - list of default values, when the switch is found without parameters. 
+       default - list of default values to use, when this switch is not found.
+       multiple - if true, allows this command multiple times
+                  if false the 2nd occurance creates a error. 
+       params - list of command parameters descriptors, each table containing fields:
+         t - parameter type: 
+             str   (string - default), 
+             int   (integer - bin/oct/hex/dec), 
+             float (float), integer/float arguments.
+         min,max - allowed numeric range (for int/float) or string length range (for strings)
+         delim (char) - alows multiple values in one parameter separated by <char>.
+                        this cmd alows 1 parameter definitions only.
+         re - regexp used to check string parameter,
+         vals - list of possible parameter values,
+  
+  returns:
+    error: nil, string:error message
+    ok:    table:args
+             - table of parsed parameters in the form 
+               {tag={value[,valuem...]}}.
+  --]]
+  cmdl.parse = function(argv, argsd)
+    local result = {};
+    -- use default parameters, if no parameter given ..
+    argv, argsd = argv or arg, argsd or cmdl.argsd;
+    --
+    local argc, err;
+    local othercnt = 1;
+    local shortParamNames = {};
+    local paramd = {}; --parameter descriptors (for faster search)
+    -- fill paramd & shortParamNames list...
+    for _, descr in ipairs(argsd) do
+      for _, cmd in pairs(descr.cmd) do
+        if cmd:match"^%-[^%-]" then insert(shortParamNames, cmd); end; --remember short params
+        paramd[cmd] = descr;
+      end;
+    end;
+    -- sort shortParamNames
+    table_sort(shortParamNames, function(a, b) return ((#a == #b) and a < b) or #a > #b; end);
+    --
+    local function switch(str, others)
+      if not str then return; end;
+      local cmd, argd, val;
+      -- long arg test
+      cmd, val = str:match"^(%-%-[^=%s]+)[=]?(.*)";
+      -- short arg test
+      if not cmd and str:match"^%-[^%-]" then 
+        for _, sw in ipairs(shortParamNames) do
+          sw = sw:gsub("([%-%?])","%%%1");
+          if str:match("^"..sw) then
+            cmd, val = str:match("^("..sw..")(.*)$"); 
+            val = val and #val > 0 and val or nil;
+            break;
+          end;
+        end;
+      end;
+      -- prepare result
+      argd = paramd[cmd];
+      -- no result: others arg test
+      if not argd and others then
+        others = others[othercnt];
+        if others.multiple or (#others.params == 1 and others.params[1].delim) then 
+          return others, str; 
+        end;
+        othercnt = othercnt + 1;
+        return others, str;
+      end;
+      val  = val and #val > 0 and val or nil;
+      return argd, val;
+    end;
+  
+    local function blocked(argd)
+      if argd and argd.blockedby then
+        for _, sw in ipairs(argd.blockedby) do
+          if result[sw] then
+            err = argc;
+            return true;
+          end;           
+        end;
+      end;
+      return false;
+    end;
+  
+    local function storeValue(argd, str)
+      local function value_ok(val, paramd)
+        if paramd.t == 'int' then -- parameter is int
+          -- determine number base
+          local base = 10
+          local baseChar = val:match('^0([bBoOdDxX])')
+          if baseChar then -- 0x base given
+            baseChar = baseChar:lower()
+            if baseChar == 'b' then base = 2 -- binary
+            elseif baseChar == 'o' then base = 8 -- octal
+            elseif baseChar == 'd' then base = 10 -- decimal
+            elseif baseChar == 'x' then base = 16 -- hexadecimal
+            end
+            val = val:sub(3, -1) -- extract numeric part
+          end;
+          val = tonumber(val, base); -- convert to number
+          if val then -- no error during conversion - check min/max
+            -- min/max given - check
+            if ((paramd.min) and (val < paramd.min)) or
+               ((paramd.max) and (val > paramd.max)) then 
+              return; 
+            end;
+          end;
+        elseif paramd.t == 'float' then -- parameter is float
+          val = tonumber(val) -- convert to number
+          if val then
+            -- min/max given - check
+            if ((paramd.min) and (val < paramd.min)) or
+               ((paramd.max) and (val > paramd.max)) then 
+              return; 
+            end;
+          end;
+        else  -- parameter is string
+          if paramd.re then -- check with regexp if given
+            local m = val:match(paramd.re);
+            if (m == nil) or (#m ~= #val) then return; end;
+          end;
+          if val then
+            -- check for min/max string length
+            if ((paramd.min) and (#val < paramd.min)) or
+               ((paramd.max) and (#val > paramd.max)) then 
+              return; 
+            end;
+          end;
+        end;
+        -- check for allowed values list
+        if paramd.vals then 
+          for _, _val in pairs(paramd.vals) do
+            if val == _val then return val; end;
+          end;
+          -- value not found in values array - error
+          return;
+        end;
+        return val;
+      end;
+      --
+      if str then
+        -- switch takes parameters?
+        if not argd.params then err = argc; return; end;
+        result[argd.tag] = result[argd.tag] or {};
+        local result = result[argd.tag];
+        -- switch takes one parameter multiple times?
+        if #argd.params == 1 and argd.params[1].delim then
+          local strl = split(str, argd.params[1].delim);
+          for _, _str in ipairs(strl) do
+            _str = value_ok(_str, argd.params[1])
+            if _str then
+              insert(result, _str);
+            else
+              err = argc;
+              return;
+            end;
+          end;
+          return;
+        end;
+        -- switch takes one parameter?
+        if #argd.params == 1 then
+          str = value_ok(str, argd.params[1])
+          if str then
+             insert(result, str);
+          else
+            err = argc;
+          end;
+          return;
+        end;
+        -- switch takes multiple parameter?
+        if #argd.params > 1 then
+          local strl = split(str, argd.delim);
+          if #argd.params ~= #strl then err = argc; return; end;
+          local res = {};
+          for i = 1, #argd do
+            strl[i] = value_ok(strl[i], argd.params[i])
+            if strl[i] then
+              insert(res, strl[i]);
+            else
+              err = argc;
+              return
+            end;
+          end;
+          if argd.multiple then
+            insert{result, res};
+          else
+            for _, v in ipairs(res) do
+              insert(result, v);
+            end;
+          end;
+          return;
+        end;
+        --error("This should not happen here.");
+      elseif argd.params then
+        if argd.params.def then
+          result[argd.tag] = argd.params.def;
+        else
+          err = min(argc, #argv);
+        end;
+      else
+        result[argd.tag] = {true};
+      end;
+    end;
+    
+    -- scanning loop
+    argc = 1;
+    local nxtargd, nxtval;
+    while (argc <= #argv) do
+      local argd, val;
+      argd, val, nxtargd, nxtval = nxtargd, nxtval; -- shift
+      -- expand next switch, if nessesary
+      if not argd then argd, val = switch(argv[argc], argsd.others); end;
+      if blocked(argd) then 
+        err = argc;
+        break;
+      end;
+      if val then -- value attached to switch ...
+        if argd.params then
+          storeValue(argd, val);
+        else
+          err = argc;
+        end;
+      elseif not argd.params then
+        storeValue(argd, nil);
+      elseif  argd.params then
+        nxtargd, nxtval = switch(argv[argc+1]);
+        if not nxtargd then 
+          argc = argc + 1;
+          storeValue(argd, argv[argc]);
+        else
+          storeValue(argd);
+        end;
+      end;
+      if err then break; end;
+      argc = argc + 1;
+    end;
+    -- handle errors
+    if err then  -- generate error message
+      local msg = "";
+      for i = 1, #argv do
+        if i == err then 
+          msg = msg .. " [?> ".. argv[i] .." <?]";
+        else
+          msg = msg .. " " .. argv[i];
+        end;
+      end
+      return nil, msg;  -- error, error message
+    end;
+    -- fill in default values for ommited parameters.
+    for _, _argd in ipairs(argsd) do
+      if _argd.default and result[_argd.tag] == nil then
+        result[_argd.tag] = _argd.default;
+      end;
+    end;
+    -- flatten result list for simple parameters...
+    for _, _argd in ipairs(argsd) do
+      if result[_argd.tag] and (not _argd.params or (#_argd.params == 1 and 
+          not (_argd.multiple or _argd.params[1].delim))) then
+        result[_argd.tag] = result[_argd.tag][1] or true;
+      end;
+    end;
+    --
+    return result;
+  end;
+  
+  -- generates help text from description table
+  cmdl.help = function(indent)
+    local result = {};
+    indent = indent or 0;
+    if not cmdl.argsd then error("cmdl.help() - no parameter definition found."); end;
+    for _, arg in ipairs(cmdl.argsd) do
+      local cmdl = string.rep(" ", indent);
+      for _, cmd in ipairs(arg.cmd) do
+        cmdl = cmdl .. cmd .. ', ';
+      end
+      cmdl = cmdl:sub(1, -3);
+      if arg.params then
+        cmdl = cmdl .. '=';
+        for _, param in ipairs(arg.params) do
+          if param.values then -- show list of values
+            cmdl = cmdl .. "";
+            for _, v in ipairs(param.values) do cmdl = cmdl .. v .. '|' end;
+            cmdl = cmdl:sub(1,-2) .. ' ';
+          elseif param.min or param.max then -- show min/max
+            cmdl = cmdl..'['
+            if param.min then cmdl = cmdl .. param.min end;
+            cmdl = cmdl .. '..';
+            if param.max then cmdl = cmdl .. param.max end;
+            cmdl = cmdl .. '] ';
+          else -- else show parameter type
+            local t = param.lbl or param.t or 'str';
+            --t = t:upper();
+            cmdl = cmdl .. t;
+            if param.delim then 
+              cmdl = cmdl .. "{" .. param.delim .. t .. "}";
+            end;
+          end;
+        end;
+      else
+        cmdl = cmdl .. ' ';
+      end;
+      insert(result, {cmdl, arg.descr});
+    end;
+    local maxlen = 0;
+    for _, t in ipairs(result) do 
+      if #t[1] > maxlen then maxlen = #t[1]; end;
+    end;
+    for i, t in ipairs(result) do 
+      result[i] = t[1] .. string.rep(" ", maxlen - #t[1]) .. " " .. t[2]; 
+    end;
+    return concat(result,"\n");
+  end;
+  --
+  return cmdl;
+end;
 --
 -- [] =======================================================================
 --
@@ -430,10 +778,6 @@ local class    = require "33log";
 local lfs      = require "lfs";
 local attributes, mkdir = lfs.attributes, lfs.mkdir;
 --
-local concat, insert, remove = table.concat, table.insert, table.remove;
-local type, select, ipairs, pairs = type, select, ipairs, pairs;
-local max       = math.max;
---
 local DIRSEP    = package.config:sub(1, 1);
 local WINDOWS   = DIRSEP == '\\' or nil;
 local MAKELEVEL = 0;
@@ -441,7 +785,7 @@ local Make;
 --
 --=== [utils] ===============================================================
 local warning, warningMF, quit, quitMF, dprint, chdir, choose, pick, split, 
-      split2, collect, shell, execute, roTable, pairsByKeys, 
+      shell, execute, roTable, pairsByKeys, 
       luaVersion, 
       winapi, posix,
       ENV, PWD, NUMCORES;
@@ -458,7 +802,6 @@ do
   local update_pwd;
   --
   local dir_stack = {};
-  local push, pop = table.insert, table.remove;
   function update_pwd()
     local dir = lfs.currentdir();
     if WINDOWS then dir = dir:lower() end;
@@ -468,9 +811,9 @@ do
   function chdir(path)
     if not path then return end
     if path == '!' or path == '<' then
-      lfs.chdir(pop(dir_stack))
+      lfs.chdir(remove(dir_stack))
     else
-      push(dir_stack, lfs.currentdir())
+      insert(dir_stack, lfs.currentdir())
       local res, err = lfs.chdir(path)
       if not res then quitMF(err) end;
     end;
@@ -491,10 +834,8 @@ do
   
   function pairsByKeys(t)
     local a = {};
-    for n in pairs(t) do 
-       insert(a, n); 
-    end;
-    table.sort(a, function(a, b)
+    for n in pairs(t) do insert(a, n); end;
+    table_sort(a, function(a, b)
        return (type(a) == type(b)) and (a < b)  or (type(a) < type(b))
       end
     );
@@ -507,14 +848,14 @@ do
    
   function choose(cond, v1, v2)
     if type(cond) == 'string' then
-        cond = cond~='0' and cond~='false'
-    end
+      cond = cond ~= '0' and cond ~= 'false'
+    end;
     if cond then return v1 else return v2 end;
   end;
   
   function pick(a, b, ...)
     if a ~= nil then 
-      return a 
+      return a;
     elseif select("#", ...) == 0 then
       return b;
     else
@@ -538,21 +879,9 @@ do
     end;
   end;
 
-  function split2(s, delim)
-    return s:match('([^'..delim..']+)'..delim..'(.*)')
-  end;
-
-  function collect(table, field)
-    local res = {}
-    for _, o in ipairs(table) do
-      insert(res, o[field]);
-    end;
-    return res;
-  end;
-
   function shell(cmd, ...)
     cmd = cmd:format(...)
-    local inf = io.popen(cmd..' 2>&1','r');
+    local inf = io_popen(cmd..' 2>&1','r');
     if not inf then return '' end;
     local res = inf:read('*a');
     inf:close();
@@ -564,7 +893,7 @@ do
     if quiet or cmd:find("%s%s%s%s$") then
       cmd = cmd:gsub("%s*$"," > ") .. choose(WINDOWS, 'NUL', '/dev/null') .. " 2>&1";
     end
-    local res1, _, res3 = os.execute(cmd)
+    local res1, _, res3 = os_execute(cmd)
     if type(res1) == "number" then
       return res1 == 0, res1;
     else
@@ -579,7 +908,7 @@ do
   --
   ENV = setmetatable({}, {
       __index = function(self,key)
-        return os.getenv(key)
+        return os_getenv(key)
       end;
       __newindex = function(self, key, value)
         local M = winapi or posix or quitMF("ENV[]: need winapi/posix for environment writes.");
@@ -603,7 +932,7 @@ local fn_temp,     fn_isabs,      fn_canonical,  fn_join,     fn_isFile,
 do
   --
   function fn_temp ()
-    local res = os.tmpname();
+    local res = os_tmpname();
     if WINDOWS then -- note this necessary workaround for Windows
       res = ENV.TMP .. res;
     end;
@@ -682,9 +1011,7 @@ do
 
   function fn_exists(...)
     local fname = fn_join(...);
-    if attributes(fname) ~= nil then
-      return fname;
-    end;
+    if attributes(fname) ~= nil then return fname; end;
     return nil;
   end;
   
@@ -701,12 +1028,10 @@ do
     local i = #path;
     local ch = path:sub(i, i);
     while i > 0 and ch ~= '.' do
-      if ch == '/' or ch == '\\' then
-        return path,''
-      end
+      if ch == '/' or ch == '\\' then return path,''; end;
       i = i - 1;
-      ch = path:sub(i, i)
-    end
+      ch = path:sub(i, i);
+    end;
     if i == 0 then
       return path, '';
     else
@@ -715,8 +1040,8 @@ do
   end;
   
   function fn_get_ext(path)
-    local _, p2 = fn_splitext(path)
-    return p2
+    local _, p2 = fn_splitext(path);
+    return p2;
   end;
   
   function fn_splitpath(path)
@@ -781,52 +1106,49 @@ do
     if WINDOWS then -- no 'which' commmand, so do it directly
       -- use the PATHEXT environment var. This way we find executable scripts too.
       local pathext = split(ENV.PATHEXT:lower(), ';')
-      if fn_get_ext(prog) ~= '' then 
-        pathext = {''}
-      end;
+      if fn_get_ext(prog) ~= '' then pathext = {''}; end;
       local path = split(ENV.PATH, ';')
       for _, dir in ipairs(path) do
         dir = fn_path_lua(dir);
         for _, ext in ipairs(pathext) do
-          local f = fn_exists(dir, prog..ext)
+          local f = fn_exists(dir, prog..ext);
           if f then return f end;
         end;
       end;
       return false;
     else
       local res = shell('which %s 2> /dev/null', prog);
-      if res == '' then return false end;
+      if res == '' then return false; end;
       return res;
-    end
+    end;
   end;
  
   function fn_filetime(fname)
     return attributes(fname, 'modification') or -1;
   end;
   
-  function fn_get_files(files, path, pat, recurse)
-    for f in lfs.dir(path) do
-      if f ~= '.' and f ~= '..' then
-        local file = f;
+  function fn_get_files(path, pat, recurse, files)
+    files = files or {};
+    for file in lfs.dir(path) do
+      if file ~= '.' and file ~= '..' then
         if path ~= '.' then file = fn_join(path, file) end;
-        if recurse and fn_isDir(file) then
-          fn_get_files(files, file, pat, recurse);
-        elseif f:find(pat) then
-          insert(files, file);
+        if fn_isDir(file) then
+          if recurse then fn_get_files(file, pat, recurse, files); end;
+        else
+          local _, fn = fn_splitpath(file);
+          if fn:find(pat) then insert(files, file); end;
         end;
       end;
     end;
+    return files
   end;
   
   function fn_files_from_mask(mask, recurse)
     local path, pat = fn_splitpath(mask);
-    if not pat:find('%*') then return nil end;
-    local files = {};
     if path == '' then path = '.' end;
     -- turn shell-style wildcard into Lua regexp
-    pat = pat:gsub('%.','%%.'):gsub('%*','.*')..'$'
-    fn_get_files(files, path, pat, recurse);
-    return files;
+    pat = "^"..pat:gsub('%.','%%.'):gsub('%*','.*')..'$';
+    return fn_get_files(path, pat, recurse);
   end;
   
   function fn_get_directories(dir)
@@ -872,7 +1194,7 @@ do -- [os & hardware detection] =============================================
   
   function luaVersion()
     local f = function() return function() end end;
-    local t = {nil, [false]  = 'LUA5.1', [true] = 'LUA5.2', [1/'-0'] = 'LUA5.3', [1] = 'LUAJIT' };
+    local t = {nil, [false]  = '51', [true] = '52', [1/'-0'] = '53', [1] = 'JIT' };
     return t[1] or t[1/0] or t[f()==f()];
   end;
   --
@@ -882,28 +1204,25 @@ do -- [os & hardware detection] =============================================
     else
       local t = fn_get_directories("/sys/devices/system/cpu");
       for i= #t, 1, -1 do
-        if not t[i]:find("/cpu[%d]+$") then 
-          remove(t,i); 
-        end;
+        if not t[i]:find("/cpu[%d]+$") then remove(t,i); end;
       end;
-      return #t
+      return #t;
     end;
   end;
   NUMCORES = getCores();
   --
-  dprint("  Running on %s\t %s cores detected.",  luaVersion(), NUMCORES);
+  dprint("  Running on Lua%s\t %s cores detected.",  luaVersion(), NUMCORES);
   --
 end;
 --
 do -- [error handling] ======================================================
   --
   local scriptfile = arg[0];
-  --dprint(scriptfile);
   --
   function warning(reason, ...)
     if not Make.options or Make.options.verbose or Make.options.print_warnings then
       reason = reason or '?'
-      io.stderr:write(reason:format(...), '\n')
+      io_stderr:write(reason:format(...), '\n')
     end;
   end;
   
@@ -914,10 +1233,9 @@ do -- [error handling] ======================================================
       local info;
       repeat
         i = i + 1;
-        info = debug.getinfo(i);
-        --dprint(scriptfile, info.short_src)
+        info = debug_getinfo(i);
       until info.short_src ~= scriptfile;
-      io.stderr:write(
+      io_stderr:write(
         ("%s:%1.0d: - "):format(fn_canonical(info.short_src), info.currentline) ..
         reason:format(...) .. "\n"
       );
@@ -937,13 +1255,13 @@ do -- [error handling] ======================================================
       end;
       local sFileLine = "";
       if lvl > 1 then
-        local errtbl = debug.getinfo(lvl);
+        local errtbl = debug_getinfo(lvl);
         sFileLine = ("%s:%1.0d: - "):format(fn_canonical(fn_abs(errtbl.short_src)), errtbl.currentline);
       end;
       reason = sFileLine .. reason;
     end;
-    io.stderr:write(reason, '\n');
-    os.exit(2);
+    io_stderr:write(reason, '\n');
+    os_exit(2);
   end;
   
   function quitMF(reason, ...)
@@ -952,14 +1270,13 @@ do -- [error handling] ======================================================
     local info;
     repeat
       i = i + 1;
-      info = debug.getinfo(i);
-      --dprint(scriptfile, info.short_src)
+      info = debug_getinfo(i);
     until info.short_src ~= scriptfile;
-    io.stderr:write(
+    io_stderr:write(
       ("%s:%1.0d: - "):format(fn_canonical(info.short_src), info.currentline) ..
       reason:format(...) .. "\n"
     );
-    os.exit(2);
+    os_exit(2);
   end;
   --
 end;
@@ -1025,7 +1342,7 @@ do
                  t = "int",
                  min = 1,
                  },
-               --def = {tonumber(NUMCORES)},
+               def = {tonumber(NUMCORES)},
                }
     },
     { tag = "printversion", 
@@ -1077,10 +1394,10 @@ do
   local function execute_wrapper(cmd, callback)
     local cmdline, tmpfile = command_line(cmd);
     local ok, code = execute(cmdline);
-    local inf = io.open(tmpfile, 'r');
+    local inf = io_open(tmpfile, 'r');
     callback(ok, code, inf)
     inf:close();
-    os.remove(tmpfile);
+    os_remove(tmpfile);
   end;
   
   job_execute = execute_wrapper;
@@ -1097,20 +1414,16 @@ do
       local comspec = ENV.COMSPEC .. ' /c ';
       --
       function spawn(cmd)
-        --dprint("spawn\t\t%s\t%s", #Processes, n_threads)
         cmd = comspec..cmd;
         if #cmd > 32767 then quit("spawn(): commandline too long (%s chars)", #cmd); end;
         return winapi.spawn_process(comspec..cmd);
       end;
       --
       function wait()
-        --dprint("wait\t\t%s\t%s", #Processes, n_threads)
         local idx, err = winapi.wait_for_processes(Processes, false)
-        if err then 
-          return nil, err 
-        end;
+        if err then return nil, err; end;
         local p = Processes[idx]
-        return idx, p:get_exit_code(), err
+        return idx, p:get_exit_code(), err;
       end;
       --
     end;
@@ -1122,7 +1435,7 @@ do
         if cpid == 0 then
           if posix.exec('/bin/sh','-c',cmd) == -1 then
             local _, code = posix.errno()
-            os.exit(code)
+            os_exit(code)
           end
         else
           return cpid
@@ -1147,31 +1460,26 @@ do
     end;
     
     function jobs_wait(cmd, callback)
-      --dprint("jobs_wait\t%s\t%s", #Processes, n_threads)
       if #Processes == 0 then 
         if cmd then job_start(cmd, callback); end;
-        return 
+        return;
       end;
       local idx, code, err = wait();
       if cmd then job_start(cmd, callback); end;
       if err then return nil, err end;
       local item, p = Outputs[idx], Processes[idx];
-      local inf, _ = io.open(item.tmp, 'r');
+      local inf, _ = io_open(item.tmp, 'r');
       Processes:remove(idx);
       Outputs:remove(idx);
-      --dprint("callback\t%s\t%s", #Processes, n_threads)
       item.callback(code == 0, code, inf);
       if item.read then item.read:close() end;
       inf:close();
       if winapi then p:close(); end
-      os.remove(item.tmp);
+      os_remove(item.tmp);
     end;
     
     function jobs_clear()
-      --dprint("jobs_clear\t%s\t%s", #Processes, n_threads)
-      while #Processes > 0 do 
-        jobs_wait(); 
-      end;
+      while #Processes > 0 do jobs_wait(); end;
     end;
     
     function job_execute(cmd, callback)
@@ -1190,7 +1498,7 @@ do
   end;
   
   concurrent_jobs = function(nj)
-    local toi = math.tointeger or tonumber;
+    local toi = tointeger or tonumber;
     nj = toi(nj);
     if not winapi or posix then return nil, "concurrent_jobs(): no threading available. winapi/posix needed." end;
     if type(nj) ~= 'number' then return nil, "concurrent_jobs(): number of jobs must be a integer" end;
@@ -1351,7 +1659,6 @@ do -- [Make] ================================================================
       choose          = choose,  
       pick            = pick,  
       split           = split,   
-      split2          = split2 , 
       shell           = shell, 
       execute         = execute, 
       which           = fn_which;
@@ -1389,14 +1696,14 @@ do -- [Make] ================================================================
       local options, msg = cmdl.parse(cmd);
       if not options then 
         print(("* error in parameter:%s"):format(msg)); 
-        os.exit(1);
+        os_exit(1);
       end;
       target = options.targets;
       clMake.options = options;
       --
       if options.printversion then -- -V, --version
         print(VERSION);
-        os.exit();
+        os_exit();
       end;
       if options.jobs then         -- -j, --jobs
         local ok, err = concurrent_jobs(clMake.options.jobs)
@@ -1414,7 +1721,7 @@ do -- [Make] ================================================================
       -- BEFORE the help message becomes generated.
       if options.printhelp then    -- -h, --help
         print(USAGE:format(cmdl.help(1)));
-        os.exit();
+        os_exit();
       end;
      --
       return makefile, target;
@@ -1423,9 +1730,6 @@ do -- [Make] ================================================================
     cmd = cmd or {};
     if type(cmd) == "string" then cmd = split(cmd); end;
     if MAKELEVEL == 0 then -- parse the command line ...
-      -- Load preloaded toolchains.
-      --Make.Tools:load("gnu targets repositories"); --TODO
-      --
       makefile, target = parseCommandline(cmd);
       self.target = target;
       makefile = makefile or MAKEFILENAME;
@@ -1477,6 +1781,7 @@ do
     -- subclass has to redefine this method.
     error("clMaketreeNode:needsBuild(): abstract method called.");
   end;
+  
   clTreeNode.getBuildSequence = function(self, buildAll)
     local FileList = clTargetList:new();
     local PresList = clTargetList:new();
@@ -1493,18 +1798,13 @@ do
       needIMs = needIMs or node.bP21NeedsBuild;
       node.bP22NeedsBuild = needIMs and not node.bClean or node.bForce or buildAll;
       lvl = lvl or 1;
-      if not node:is("TargetList Target") or node.action then
-        lvl = lvl + 1;
-      end;
+      if not node:is("TargetList Target") or node.action then lvl = lvl + 1; end;
       maxLevel = max(maxLevel, lvl);
       node.level = max(node.level or -1, lvl);
       -- expanding from's
       if node.from then
         for fs in node.from() do
-          local ft = Needs(fs);
-          for n, v in pairs(ft) do
-            node[n]:add(v);
-          end;
+          for n, v in pairs(Needs(fs)) do node[n]:add(v); end;
         end;
         node.from = nil;
       end;
@@ -1574,15 +1874,8 @@ do
           self.action = deps.action;
         end;
         self.deps = deps and clTargetList:new(deps);
-        --self.prerequisites = self.deps.prerequisites;
       end;
       return self;
-    end,
-    __tostring = function(self)
-      local tStr = {("class.%s('%s')"):format(self.__classname, self[1])};
-      if self.deps then insert(tStr,("deps:%s"):format(#self.deps)); end;
-      --if self. then insert(tStr,(""):format()); end;
-      return concat(tStr, ", ");
     end,
   });
   
@@ -1624,16 +1917,7 @@ do
   clFile = clTreeNode:subclass("File", {
     init  = function(self, ...) -- ([<path>,]* filename)
       self[1] = fn_abs(fn_join(...));
-      --self:getFiletime();
       return self;
-    end,
-    __tostring = function(self) -- debug helper
-      local tStr = {("class.%s('%s')"):format(self.__classname, self[1])};
-      if self.deps then insert(tStr,("deps:%s"):format(#self.deps)); end;
-      if self.bDirty then insert(tStr,"Dirty"); end;
-      if self.bClean then insert(tStr,"Clean"); end;
-      if self.target then insert(tStr,"Target"); end;
-      return concat(tStr, ", ");
     end,
   });
   
@@ -1685,7 +1969,6 @@ do
   });
   
   clSourceFile.getFiletime = function(self)
-    --self._filetime = tSourceFileTimes[self[1]];
     return self._filetime;
   end;
   
@@ -1694,9 +1977,7 @@ do
     if self.bP21Done then return self.bDirty, self._nodeTime, not self.bDirty; end;
     local time = self:getFiletime();
     local dirty, modtime = false, -1;
-    if self.deps then 
-      dirty, modtime = self.deps:needsBuild(); 
-    end;
+    if self.deps then dirty, modtime = self.deps:needsBuild(); end;
     self._nodeTime = max(time or -1, modtime or -1);
     self.bDirty = dirty or (time < self._nodeTime);
     self.bP21Done = true;
@@ -1752,10 +2033,10 @@ do
     local depfile = fn_forceExt(self[1], ".d");
     if self:exists() then 
       if not Make.options.quiet then print("DELETE " .. fn_canonical(self[1])); end;
-      if not Make.options.dont_execute then os.remove(self[1]); end;
+      if not Make.options.dont_execute then os_remove(self[1]); end;
       if fn_exists(depfile) then
         if not Make.options.quiet then print("DELETE " .. fn_canonical(depfile)); end;
-        if not Make.options.dont_execute then os.remove(depfile); end;
+        if not Make.options.dont_execute then os_remove(depfile); end;
       end;
     end;
   end;
@@ -1769,12 +2050,6 @@ do
         i = i + 1;
         return self[i];
       end;
-    end,
-    __tostring = function(self)
-      local tStr = {("class.%s() %s items."):format(self.__classname, #self)};
-      if self.deps then insert(tStr,("deps:%s"):format(#self.deps)); end;
-      --if self. then insert(tStr,(""):format()); end;
-      return concat(tStr, ", ");
     end,
   });
 
@@ -1795,7 +2070,6 @@ do
         end;
       else
         error(("cant overwrite value '%s'"):format(item[kf]));
-        --return nil, self.__dir[item[kf]];
       end;
     elseif type(item) == "table" then  
       for _, v in ipairs(item) do 
@@ -1824,19 +2098,15 @@ do
     return dirty, time, clean;
   end;
   
-  clTargetList.new_sourcefile    = function(self, ...) 
+  clTargetList.new_sourcefile    = function(self, ...)
     local item = clSourceFile:new(...);
-    if item then 
-      self:add(item); 
-    end;
+    if item then self:add(item); end;
     return item;
   end;
   
-  clTargetList.new_generatedfile = function(self, ...) 
+  clTargetList.new_generatedfile = function(self, ...)
     local item = clGeneratedFile:new(...);
-    if item then 
-      self:add(item); 
-    end;
+    if item then self:add(item); end;
     return item;
   end;
   
@@ -1848,9 +2118,7 @@ do
   
   clTargetList.canonical         = function(self, ...)
     local res = {};
-    for f in self() do
-      insert(res, f:canonical());
-    end;
+    for f in self() do insert(res, f:canonical()); end;
     return concat(res," ");
   end;
   
@@ -1878,7 +2146,6 @@ do
   clMakeScript.default = default;
   clMakeScript.target  = target;
   --
-  --clMake.Tempfiles = GeneratedFiles;
   clMake.Targets   = Targets;
   --
 end;
@@ -1896,9 +2163,7 @@ do
   
   clNeeds.__call = function(self, ...) -- need definition and reading
     local p1, p2, unused = select(1, ...);
-    if type(unused) ~= "nil" then 
-      quitMF("%s: wrong parameter.", self.__classname); 
-    end;
+    if type(unused) ~= "nil" then quitMF("%s: wrong parameter.", self.__classname); end;
     if (type(p1) == "string") and (p2 == nil)  then
       -- "alias = need" ?
       if p1:find("=") then
@@ -1918,9 +2183,7 @@ do
         local res = {};
         local fs = split(p1:match("^[^:]+:(.+)$"), ",");
         for _, fn in ipairs(fs) do
-          if n[fn] then
-            res[fn] = class.StrList:new(n[fn]);
-          end;
+          if n[fn] then res[fn] = class.StrList:new(n[fn]); end;
         end;
         return res;
       end;
@@ -1967,7 +2230,7 @@ do -- [make pass 2 + 3] =====================================================
     local strict      = not Make.options.nostrict; --TODO:
     local targets;
     --
-    local function getTarget()
+    local function getTarget() --TODO: rework
       if targets == nil then
         if not Targets:find("default") then
           for node in GeneratedFiles() do
@@ -1998,7 +2261,7 @@ do -- [make pass 2 + 3] =====================================================
     -- pass 2
     local function needsBuild(treeNode)
       local res = treeNode:needsBuild();
-      if Make.options.question then os.exit(res and 1 or 0); end;
+      if Make.options.question then os_exit(res and 1 or 0); end;
       res = res or always_make;
       if not res and not quiet then print("... all up to date."); end;
       return res;
@@ -2019,7 +2282,7 @@ do -- [make pass 2 + 3] =====================================================
             nodesdone = nodesdone + 1;
             -- construct command line
             if node:is("GeneratedFile") and not node.command then
-              node.command = node.tool:build_command(node);
+              node.tool:build_command(node);
             end;
             if node.command and not quiet then 
               if verbose then
@@ -2046,7 +2309,7 @@ do -- [make pass 2 + 3] =====================================================
                   if not ok and msg then print(msg); end;
                   if not ok and strict then --abort ...
                     jobs_clear();
-                    os.exit(2);
+                    os_exit(2);
                   end;
                   node.done = true;
                   node.bDirty = nil;
@@ -2060,7 +2323,7 @@ do -- [make pass 2 + 3] =====================================================
                       end;
                       if not ok and strict then --abort ...
                         jobs_clear();
-                        os.exit(code);
+                        os_exit(code);
                       end;
                       node.done = true;
                       node.bDirty = nil;
@@ -2075,9 +2338,7 @@ do -- [make pass 2 + 3] =====================================================
       --
       lvlTbl, numnodes = node:getBuildSequence(always_make);
       for i = #lvlTbl, 1, -1 do
-        for _, n in ipairs(lvlTbl[i]) do 
-          buildNode(n); 
-        end;
+        for _, n in ipairs(lvlTbl[i]) do buildNode(n); end;
         jobs_clear();
       end;
     end;
@@ -2092,7 +2353,7 @@ do -- [make pass 2 + 3] =====================================================
   --
 end;
 --
-do -- [tools] ===============================================================
+do -- [tools & rules] =======================================================
   local clTool, Rule, Group;
   --
   clTool = class.base:subclass("Tool", {
@@ -2106,28 +2367,10 @@ do -- [tools] ===============================================================
   });
   
   -- utilities
-  function clTool:allParamsEaten(par)
-    for n in pairs(par) do
-      quitMF("%s(): parameter '%s' not processed.", self[1], n);
-    end;
-  end;
-
-  function clTool:collect_defines(TreeNode)
-    local res = class.StrList:new();
-    if TreeNode.defines then 
-      res:add(TreeNode.defines); 
-    end;
-    if Make.options.define then 
-      res:add(Make.options.define);
-    end;
-    return res
-  end;
-  
   function clTool:readDepFile(TreeNode) -- return a TargetList with all included files. or nil.
     local depfilename = fn_forceExt(TreeNode[1], ".d");
-    local f = io.open(depfilename);
+    local f = io_open(depfilename);
     if f then
-      --dprint(depfilename);
       local txt = {};
       for line in f:lines() do
         if line:find("^%s%S") then
@@ -2155,17 +2398,33 @@ do -- [tools] ===============================================================
     end;
     return nil;
   end;
+  
+  function clTool:checkParam(...)
+    if select("#", ...) ~= 1 then quitMF("%s(): only one parameter alowed. Did you use {}?", self[1]); end;
+    local par = select(1, ...);
+    if type(par) ~= "table" then quitMF("%s(): parameter needs to be a table. Did you use {}?", self[1]); end;
+    return par;
+  end;
+
+  function clTool:add_action(what, func)
+    local fn = "action_"..what;
+    if func then self[fn] = func; end;
+    self[what] = function(...) return self[fn](self, ...); end;
+    if not self.__default then self.__default = self[what]; end;
+  end;
   -- command line generation
-  function clTool:process_DEFINES(TreeNode)
-    local values = self:collect_defines(TreeNode);
+  function clTool:expand_DEFINES(TreeNode)
+    local values = class.StrList:new();
+    values:add(TreeNode.defines); 
+    values:add(Make.options.define);
     if #values == 0 then return ""; end;
     return "-D"..concat(values, " -D");
   end;
 
-  function clTool:process_OPTIONS(TreeNode)
+  function clTool:expand_OPTIONS(TreeNode)
     local options = class.StrList:new();
     -- for non debug builds: strip debug infos from executables and dynlibs.
-    if not MakeScript.DEBUG and (TreeNode.type == "prog" or TreeNode.type == "dlib") then
+    if not MakeScript.DEBUG and (TreeNode.tool.__par.type == "prog" or TreeNode.tool.__par.type == "dlib") then
       options:add("-s");
     end;
     -- insert cflags.
@@ -2181,33 +2440,31 @@ do -- [tools] ===============================================================
     if depcmd and not MakeScript.NODEPS and TreeNode.type == "obj" then
       options:add(depcmd);
     end;
+    --insert(options, "");
     return concat(options, " ");
   end;
   
-  function clTool:process_LIBS(TreeNode)
+  function clTool:expand_LIBS(TreeNode)
     local libs = class.StrList:new();
-    for ld in TreeNode.libdir() do
-      libs:add("-L"..fn_canonical(ld));
-    end;
-    for l in TreeNode.libs() do
-      libs:add("-l"..fn_canonical(l));
-    end;
+    for ld in TreeNode.libdir() do libs:add("-L"..fn_canonical(ld)); end;
+    for l in TreeNode.libs()    do libs:add("-l"..fn_canonical(l));  end;
     return concat(libs, " ");
   end;
   
-  function clTool:process_OPTIMIZE()
-    if DEBUG then
-      return "";
-    else
-      return MakeScript.OPTIMIZE and ("-" .. MakeScript.OPTIMIZE) or "";
+  function clTool:expand_OPTIMIZE()
+    if not MakeScript.DEBUG then
+      if MakeScript.OPTIMIZE then
+        if type(MakeScript.OPTIMIZE) == "string" then
+          return MakeScript.OPTIMIZE:gsub("%-?(.+)%s*","-%1");
+        else
+          quitMF("global var 'OPTIMIZE needs to be a string.")
+        end;
+      end;
     end;
+    return "";
   end;
   
-  function clTool:process_DEPFILE(TreeNode)
-    return fn_canonical(TreeNode.depfilename);
-  end;
-  
-  function clTool:process_SOURCES(TreeNode)
+  function clTool:expand_SOURCES(TreeNode)
     local result = {};
     if class(TreeNode, "GeneratedFile") then
       if class(TreeNode.deps, "File") then 
@@ -2225,8 +2482,8 @@ do -- [tools] ===============================================================
     if #result == 0 then return ""; end;
     return concat(result, " ");
   end;
-  
-  function clTool:process_OUTFILE(TreeNode)
+  clTool.expand_SOURCE = clTool.expand_SOURCES;
+  function clTool:expand_OUTFILE(TreeNode)
     if class(TreeNode, "GeneratedFile") then
       return fn_canonical(fn_rel(TreeNode[1]));
     else
@@ -2234,119 +2491,69 @@ do -- [tools] ===============================================================
     end;
   end;
 
-  function clTool:process_DEPSRC(TreeNode)
-    if class(TreeNode, "SourceFile") then
-      return fn_canonical(TreeNode[1]);
-    else
-      error("DEPSRC is not of class SourceFile", 2);
-    end;
-  end;
-
-  function clTool:process_PREFIX(TreeNode)
-    local px = PREFIX;
-    if px and #px > 0 then
-      px = px:gsub("%-?$","-");
-    else
-      px = "";
-    end;
-    local s = TreeNode.tool["command_"..(TreeNode.type or "")] or TreeNode.tool.command;
-    TreeNode.tool["command_" .. TreeNode.type] = s:gsub("%$PREFIX%f[%U]", px);
-    return px
-  end;
-
-  function clTool:process_SUFFIX(TreeNode)
-    local px = SUFFIX;
-    if px and #px > 0 then
-      px = px:gsub("^%-?","-");
-    else
-      px = "";
-    end;
-    local s = TreeNode.tool["command_"..(TreeNode.type or "")] or TreeNode.tool.command;
-    TreeNode.tool["command_" .. TreeNode.type] = s:gsub("%$SUFFIX", px);
-    return px
-  end;
-
-  function clTool:process_PROG(TreeNode)
-    local s = TreeNode.tool["command_"..(TreeNode.type or "")] or TreeNode.tool.command;
-    TreeNode.tool["command_" .. TreeNode.type] = s:gsub("%$PROG%f[%U]", self.PROG);
-    return self.PROG; 
+  function clTool:expand_PROG(TreeNode) --TODO: error checks
+    return self.__par.prog;
   end;
   
   function clTool:build_command(TreeNode)
-    local result = pick(TreeNode.action, self["command_"..(TreeNode.type or "")], self.command);
-    for j in result:gmatch("%$(%u+)") do
-      local s = TreeNode.__par and TreeNode.__par[j:lower()] or nil;
-      result = result:gsub("%$"..j, s or (self["process_"..j] and (self["process_"..j](self, TreeNode)) or ""));
+    local function getField(name)
+      local par = TreeNode.__par;
+      return TreeNode[name] or par and par[name] or nil;
     end;
-    return result;
-  end;
-  --
-  local stdpars = class.StrList:new "base odir prog type ext action type src cflags incdir libdir libs needs from deps";
-  function clTool:template2param(par)
-    local __par = self.__par;
-    if __par then
-      par.base   = par.base   or __par.base;
-      par.odir   = par.odir   or __par.odir;
-      par.prog   = par.prog   or __par.prog;
-      par.type   = par.type   or __par.type;
-      par.ext    = par.ext    or __par.ext;
-      par.action = par.action or __par.action;
-      par.type   = par.type   or __par.type;
-      -- src
-      if __par.src then
-        par.src = class.StrList:new(par.src);
-        par.src:add(__par.src);
-      end;
-      -- defines
-      if __par.defines then
-        par.defines = class.StrList:new(par.defines);
-        par.defines:add(__par.defines);
-      end;
-      -- cflags
-      if __par.cflags then
-        par.cflags = class.StrList:new(par.cflags);
-        par.cflags:add(__par.cflags);
-      end;
-      -- incdir
-      if __par.incdir then
-        par.incdir = class.StrList:new(par.incdir);
-        par.incdir:add(__par.incdir);
-      end;
-      -- libdir
-      if __par.libdir then
-        par.libdir = class.StrList:new(par.libdir);
-        par.libdir:add(__par.libdir);
-      end;
-      -- libs
-      if __par.libs then
-        par.libs = class.StrList:new(par.libs);
-        par.libs:add(__par.libs);
-      end;
-      -- needs
-      if __par.needs then
-        par.needs = class.StrList:new(par.needs);
-        par.needs:add(__par.needs);
-      end;
-      -- from
-      if __par.from then
-        par.from = class.StrList:new(par.from);
-        par.from:add(__par.from);
-      end;
-      --deps
-      if __par.deps then
-        par.deps = clTargetList:new(par.deps);
-        par.deps:add(__par.deps);
-      end;
-      -- all other params
-      for n, v in pairs(__par) do
-        if not stdpars.__dir[n] then
-          par[n] = par[n] or v;
+    local cmdln = getField("action");
+    local function genfunc(func, src, dst)
+      local p = {};
+      for n in cmdln:gmatch"$(%u+)" do
+        if n == "SOURCE" then
+          if class(src, "File") then
+            p.source = src[1];
+          elseif class(src, "TargetList") and #src == 1 then
+            p.source = src[1][1];
+          else
+            error("invalid parameter 'src'.");
+          end;
+        elseif n == "SOURCES" then
+          if class(src, "File") then
+            p.sources = {src[1]};
+          elseif class(src, "TargetList") then
+            p.sources = {};
+            for i = 1, #src do insert(p.sources, src[i][1]); end;
+          else
+            error("invalid parameter 'src'.");
+          end;
+        elseif n == "OUTFILE" then
+          if class(dst, "File") then
+            p.outfile = dst[1];
+          else
+            quitMF("rule.create(): invalid $OUTFILE parameter.");
+          end;
+        else
+          n = n:lower();
+          if ("string boolean number nil"):find(type(getField(n))) then
+            p[n] = getField(n);
+          else
+            quitMF("rule(): parameter '%s' needs to be string or number or boolean.", n);
+          end;
         end;
       end;
+      return function() return func(p); end;
     end;
+    
+    if TreeNode.func then
+      TreeNode.func = genfunc(TreeNode.func, TreeNode.deps, TreeNode);
+      cmdln = cmdln:gsub("%$SOURCES", self:expand_SOURCES(TreeNode)):gsub("%$OUTFILE", self:expand_OUTFILE(TreeNode)):gsub("%$%u+", "");
+    else
+      for j in cmdln:gmatch("%$(%u+)") do
+        cmdln = cmdln:gsub("%$"..j.."%s*", (self["expand_"..j] and (self["expand_"..j](self, TreeNode)) or getField(j:lower()) or "").." ");
+      end;
+    end;
+    TreeNode.command = cmdln;
   end;
-
+  --
   function clTool:getSources(par)
+    local function getField(name)
+      return par[name] or self.__par and self.__par[name] or nil;
+    end;
     local sources = clTargetList:new();
     sources.cflags        = class.StrList:new();
     sources.defines       = class.StrList:new();
@@ -2358,17 +2565,23 @@ do -- [tools] ===============================================================
     sources.needs         = clTargetList:new();
     sources.prerequisites = clTargetList:new();
     sources.tool          = self;
+    local ParValue;
     -- src = ...
-    if par.src     then
-      if type(par.src) == "string" then par.src = split(par.src); end;
-      if type(par.src) == "table" then
-        local exts = split(pick(par.ext, self.SRC_EXT, ".*"));
-        for _, n in ipairs(par.src) do
-          local f;
-          local mask = fn_join(par.base, fn_defaultExt(n, exts[1]));
-          local list = fn_files_from_mask(mask);
-          if list then
+    ParValue = getField("src");
+    if ParValue then
+      if type(ParValue) == "string" then ParValue = split(ParValue); end;
+      if type(ParValue) == "table" then
+        local exts = split(getField("ext"));
+        for _, n in ipairs(ParValue) do
+          local list, f;
+          local mask = fn_join(par.base, exts and fn_defaultExt(n, exts[1]) or n);
+          if mask:find("*") then
+            list = fn_files_from_mask(mask);
             if #list == 0 then quitMF("*ERROR: cant find source file '%s'.", mask); end;
+          else
+            list = {mask};
+          end;
+          if list then
             for _, n in ipairs(list) do
               sources:new_sourcefile(n);
             end;
@@ -2388,9 +2601,10 @@ do -- [tools] ===============================================================
       end;
     end;
     -- inputs = ...
-    if par.inputs  then
-      if class(par.inputs) then par.inputs = {par.inputs}; end;
-      for _, node in ipairs(par.inputs) do
+    ParValue = getField("inputs");
+    if ParValue  then
+      if class(ParValue) then ParValue = {ParValue}; end;
+      for _, node in ipairs(ParValue) do
         sources:add(node);
         if node.prerequisites then
           for pre in node.prerequisites() do
@@ -2404,39 +2618,26 @@ do -- [tools] ===============================================================
       par.inputs = nil;
     end;
     -- libs = ...
-    if par.libs    then
-      sources.libs:add(par.libs);
+    ParValue = getField("libs");
+    if ParValue    then
+      sources.libs:add(ParValue);
       par.libs = nil;
     end;
     -- libdir = ...
-    if par.libdir    then
-      sources.libdir:add(par.libdir);
+    ParValue = getField("libdir");
+    if ParValue  then
+      sources.libdir:add(ParValue);
       par.libdir = nil;
     end;
     -- cflags = ...
-    if par.cflags  then
-      sources.cflags:add(par.cflags);
+    ParValue = getField("cflags");
+    if ParValue  then
+      sources.cflags:add(ParValue);
       par.cflags = nil;
     end;
-    -- includes = ...
-    if par.includes    then
-      if class(par.includes, "GeneratedFile") then
-        sources.needs:add(par.includes)
-      elseif type(par.includes) == "table" then
-        for _, ts in ipairs(par.includes) do
-          if class(ts, "TreeNode") then
-            sources.needs:add(ts);
-          else
-            quitMF("make(): parameter 'includes' needs to be a target or a list of targets."); 
-          end;
-        end;
-      else
-        quitMF("make(): parameter 'includes' needs to be a target or a list of targets."); 
-      end;
-      par.includes = nil;
-    end;
     -- needs = ...
-    if par.needs   then
+    ParValue = getField("needs");
+    if ParValue   then
       local function pstring(need)
         if type(need) == "string" then need = split(need); end;
         for _, ns in ipairs(need) do
@@ -2467,7 +2668,7 @@ do -- [tools] ===============================================================
       local function pnode(need)
         for _, n in ipairs(need) do
           if type(n) == "string" then 
-            pstring(par.needs);
+            pstring(n);
           elseif class(n, "TreeNode") then
             sources.needs:add(n);
           elseif class(n, "TargetList") then
@@ -2477,43 +2678,42 @@ do -- [tools] ===============================================================
           end;
         end;
       end;
-      if type(par.needs) == "string" then 
-        pstring(par.needs);
-      elseif class(par.needs, "TreeNode") then
-        pnode({par.needs})
-      elseif class(par.needs, "TargetList") then
-        pnode(par.needs)
-      elseif class(par.needs) then
+      if type(ParValue) == "string" then 
+        pstring(ParValue);
+      elseif class(ParValue, "TreeNode") then
+        pnode({ParValue});
+      elseif class(ParValue, "TargetList") then
+        pnode(ParValue);
+      elseif class(ParValue) then
         quitMF("invalid parameter type in 'needs'."); 
-      elseif type(par.needs) == "table" then 
-        pnode(par.needs)
+      elseif type(ParValue) == "table" then 
+        pnode(ParValue);
       end;
       par.needs = nil;
     end;
     -- defines = ...
-    if par.defines then
-      sources.defines:add(par.defines);
+    ParValue = getField("defines");
+    if ParValue then
+      sources.defines:add(ParValue);
       par.defines = nil;
     end;
     -- incdir = ...
-    if par.incdir  then
-      if type(par.incdir) == "string" then
-        par.incdir = split(par.incdir);
-      end;
-      for _, d in ipairs(par.incdir) do
-        if par.base then 
-          d = fn_join(par.base, d)
-        end;
-        sources.incdir:add(d);
+    ParValue = getField("incdir");
+    if ParValue  then
+      if type(par.incdir) == "string" then ParValue = split(ParValue); end;
+      local base = getField("base");
+      for _, d in ipairs(ParValue) do
+        sources.incdir:add(fn_join(base, d));
       end;
       par.incdir = nil;
     end;
     -- deps = ...
+    ParValue = getField("deps");
     if par.deps    then
-      if class(par.deps, "GeneratedFile") then
-        sources.prerequisites:add(par.deps)
-      elseif type(par.deps) == "table" then
-        for _, ts in ipairs(par.deps) do
+      if class(ParValue, "GeneratedFile") then
+        sources.prerequisites:add(ParValue)
+      elseif type(ParValue) == "table" then
+        for _, ts in ipairs(ParValue) do
           if class(ts, "TreeNode") then
             sources.prerequisites:add(ts);
           else
@@ -2526,12 +2726,11 @@ do -- [tools] ===============================================================
       par.deps = nil;
     end;
     -- prerequisites = ...
-    if par.prerequisites then 
-      if type(par.prerequisites) == "string" then
-        par.prerequisites = split(par.prerequisites);
-      end;
-      if type(par.prerequisites) == "table" then
-        for _, ts in ipairs(par.prerequisites) do
+    ParValue = getField("prerequisites");
+    if ParValue then 
+      if type(ParValue) == "string" then ParValue = split(ParValue); end;
+      if type(ParValue) == "table" then
+        for _, ts in ipairs(ParValue) do
           local t = Targets:find(ts);
           if not t then quitMF("no target '%s' defined.", ts); end;
           sources.prerequisites:add(t[1]); --get real need name in case of alias.
@@ -2542,258 +2741,43 @@ do -- [tools] ===============================================================
       par.prerequisites = nil;
     end;
     -- from = ...
-    if par.from then
-      sources.from:add(par.from);
+    ParValue = getField("from");
+    if ParValue then
+      sources.from:add(ParValue);
       par.from = nil;
     end;
     --
     par.base = nil;
     return sources;
   end; -- getSources(par)
-
-  function clTool:checkParam(...)
-    if select("#", ...) ~= 1 then quitMF("%s(): only one parameter alowed. Did you use {}?", self[1]); end;
-    local par = select(1, ...);
-    if type(par) ~= "table" then quitMF("%s(): parameter needs to be a table. Did you use {}?", self[1]); end;
-    self:template2param(par);
-    return par;
-  end;
-  
-  function clTool:checkFileNameParam(par)
-    if type(par[1]) ~= "string" then quitMF("%s(): no valid file name at index [1].", self[1]); end;
-    return par[1];
-  end;
-
   --
-  function clTool:action_group(...)
-    local par = self:checkParam(...);
-    local sources = self:getSources(par);
-    if par.odir then
-      local result = clTargetList:new();
-      --result.prerequisites = sources.prerequisites;
-      for sf in sources() do
-        local fn = fn_forceExt(fn_basename(sf[1]),self.OBJ_EXT or self.toolchain.OBJ_EXT);
-        if type(par[1]) == "string" then fn = par[1] .. "_" .. fn; end;
-        local of = result:new_generatedfile(par.odir, fn);
-        of.deps    = sf;
-        of.tool    = self;
-        of.type    = "obj";
-        of.base    = sources.base;
-        of.defines = sources.defines;
-        of.cflags  = sources.cflags;
-        of.incdir  = sources.incdir;
-        of.libdir  = sources.libdir;
-        of.libs    = sources.libs;
-        of.needs   = sources.needs;
-        of.from    = sources.from;
-        of.needs   = sources.needs;
-        of.prerequisites = sources.prerequisites;
-        sf.deps  = (not MakeScript.NODEPS and self:readDepFile(of)) or nil;
-      end;
-      if par[1] ~= nil then remove(par, 1); end;
-      par.odir = nil;
-      self:allParamsEaten(par);
-      return result;
-    else
-      self:allParamsEaten(par);
-      return sources;
-    end;
-  end;
-  
-  function clTool:action_program(...)
-    local par = self:checkParam(...);
-    local sources = self:getSources(par);
-    local target = clGeneratedFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.EXE_EXT));
-    target.deps          = sources;
-    target.defines       = sources.defines;
-    target.cflags        = sources.cflags;
-    target.incdir        = sources.incdir;
-    target.libdir        = sources.libdir;
-    target.libs          = sources.libs;
-    target.needs         = sources.needs;
-    target.from          = sources.from;
-    target.needs         = sources.needs;
-    target.prerequisites = sources.prerequisites;
-    target.tool          = self;
-    target.type          = "prog";
-    if par[1] ~= nil then remove(par, 1); end;
-    par.odir = nil;
-    self:allParamsEaten(par);
-    return target;
-  end;
-  
-  function clTool:action_shared(...)
-    local par = self:checkParam(...);
-    local sources = self:getSources(par);
-    local target = clGeneratedFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.DLL_EXT));
-    target.deps          = sources;
-    target.defines       = sources.defines;
-    target.cflags        = sources.cflags;
-    target.incdir        = sources.incdir;
-    target.libdir        = sources.libdir;
-    target.libs          = sources.libs;
-    target.needs         = sources.needs;
-    target.from          = sources.from;
-    target.needs         = sources.needs;
-    target.prerequisites = sources.prerequisites;
-    target.tool          = self;
-    target.type          = "dlib";
-    if par[1] ~= nil then remove(par, 1); end;
-    par.odir = nil;
-    self:allParamsEaten(par);
-    return target;
-  end;
-  
-  function clTool:action_library(...)
-    local par = self:checkParam(...);
-    local sources = self:getSources(par);
-    local target = clGeneratedFile:new(par.odir, fn_forceExt(self:checkFileNameParam(par), self.LIB_EXT));
-    target.deps          = sources;
-    target.defines       = sources.defines;
-    target.incdir        = sources.incdir;
-    target.libdir        = sources.libdir;
-    target.libs          = sources.libs;
-    target.needs         = sources.needs;
-    target.from          = sources.from;
-    target.needs         = sources.needs;
-    target.prerequisites = sources.prerequisites;
-    target.tool          = self;
-    target.type          = "slib";
-    if par[1] ~= nil then remove(par, 1); end;
-    par.odir = nil;
-    self:allParamsEaten(par);
-    return target;
-  end;
+  Rule = class.Tool:new();
   --
-  function clTool:add_action(what, func)
-    if func then 
-      self["action_"..what] = func; 
-    end;
-    self[what] = function(...)
-      return self["action_"..what](self, ...);
-    end;
-    if not self.__default then 
-      self.__default = self[what]; 
-    end;
-  end;
-  
-  function clTool:add_group(func)
-    self:add_action("group", func);
-  end;
-  
-  function clTool:add_program(func)
-    self:add_action("program", func);
-  end;
-  
-  function clTool:add_shared(func)
-    self:add_action("shared", func);
-  end;
-  
-  function clTool:add_library(func)
-    self:add_action("library", func);
-  end;
-  --
-  --
-  local File = class.Tool:new{
-    SRC_EXT      = ".*",
-    OUT_EXT      = ".*",
-    command_copy = choose(WINDOWS, "copy", "cp") .. " $SOURCES $OUTFILE    ",
-    command_link = choose(WINDOWS, "copy", "cp --link") .. " $SOURCES $OUTFILE    ",
-  };
-  
-  function File:action_copy(...)
-    local par = self:checkParam(...);
-    local sources = self:getSources(par);
-    if type(par.odir) ~= "string" then quitMF("file.copy(): 'odir' is missing."); end;
-    local targets = clTargetList:new();
-    for sf in sources() do
-      local dfn = sf[1];
-      dfn = (dfn:find(sources.base) == 1) and dfn:gsub(sources.base.."/","") or dfn:match("([^/]*)$");
-      local target = targets:new_generatedfile(par.odir, dfn);
-      target.deps = sf;
-      target.tool = self;
-      target.type = "copy";
-    end;
-    return targets;
-  end;
-  
-  File:add_action("copy");
-  clMakeScript.file = File;
-  --
-  Group = class.Tool:new{
-    SRC_EXT = ".*";
-  };
-  
-  function Group:action_group(...)
-    local par = self:checkParam(...);
-    if not par.inputs then
-      local inputs = {};
-      for i = 1, #par do
-        inputs[i] = par[i];
-        par[i] = nil;
-      end;
-      par.inputs = inputs;
-    end;
-    local res = self:getSources(par);
-    self:allParamsEaten(par);
-    return res;
-  end;
-  
-  Group:add_group();
-  clMakeScript.group = Group;
-  --
-  Rule = class.Tool:new{
-  };
-  
   function Rule:action_create(...)
+    local result;
     local par = self:checkParam(...);
     --
-    local function genfunc(src, dst)
-      local p, func = {}, par.func;
-      for n in par.action:gmatch"$(%u+)" do
-        if n == "SOURCE" then
-          if class(src, "File") then
-            p.source = src[1];
-          elseif class(src, "TargetList") and #src == 1 then
-            p.source = src[1][1];
-          else
-            error("invalid parameter 'src'.");
-          end;
-        elseif n == "SOURCES" then
-          if class(src, "File") then
-            p.sources = {src[1]};
-          elseif class(src, "TargetList") then
-            p.sources = {};
-            for i = 1, #src do insert(p.sources, src[i][1]); end;
-          else
-            error("invalid parameter 'src'.");
-          end;
-        elseif n == "OUTFILE" then
-          if class(dst, "File") then
-            p.outfile = dst[1];
-          else
-            error("invalid parameter 'dst'.");
-          end;
-        else
-          n = string.lower(n);
-          if ("string boolean number nil"):find(type(par[n])) then
-            p[n] = par[n]
-          else
-            quitMF("rule(): parameter '%s' needs to be string or number or boolean.", n);
-          end;
-        end;
-      end;
-      return function() return func(p); end;
+    local function getField(name)
+      return par[name] or self.__par and self.__par[name] or nil;
     end;
     --
-    par.type = par.type or "obj";
+    par.odir   = getField("odir");
+    par.base   = getField("base");
+    par.ext    = getField("ext");
+    par.func   = getField("func");
+    par.prog   = getField("prog");
+    par.action = getField("action");
+    --
+    -- parameter checks.
+    if type(getField("action")) ~= "string" then quitMF("%s(): no valid 'action' parameter given.", self[1]); end;
+    if par.prog and par.func then quitMF("%s(): .proc and .func cant be used at the same time.", self[1]); end;
     if par.prog then
       local prog = par.prog;
       if type(prog) == "string" then
         par.prog = nil;
       elseif class(prog, "File") then
         par.needs = clTargetList:new(par.needs);
-        par.needs:add(prog)
+        par.needs:add(prog);
         prog = par.prog[1];
         par.prog = nil;
       else
@@ -2806,117 +2790,123 @@ do -- [tools] ===============================================================
         quitMF("rule(): no field '$PROG' in 'action' found.");
       end;
     end;
-    --
-    local src = self:getSources(par);
-    local processed = class.StrList:new();
-    if not par.action then quitMF("rule(): no action given."); end;
-    if type(par.action) ~= "string" then quitMF("rule(): action needs to be a string."); end;
-    --
-    local result;
-    -- default action parameter checks
     if par.action:find("$SOURCE%f[%U]") and par.action:find("$SOURCES%f[%U]") then
       quitMF("rule(): $SOURCE and $SOURCES can't be used at the same time.");
-    elseif par.func and not (par.action:find("$SOURCE%f[%U]") or par.action:find("$SOURCES%f[%U]")) then
-      quitMF("rule(): $SOURCE or $SOURCES needed in .action parameter.");
-    elseif not par.action:find("$OUTFILE%f[%U]") then
+    end;
+    if not par.action:find("$OUTFILE%f[%U]") then
       quitMF("rule(): $OUTFILE needed in .action parameter.");
     end;
-    if par.action:find("$SOURCE%f[%U]") then -- one node for each source
+    --
+    local src = self:getSources(par);
+    if par.action:find("$SOURCE%f[%U]") then -- $SOURCE => one node for each source
       result = clTargetList:new();
       for sf in src() do
-        local fn;
-        if type(par.type) == "string" and ("prog dlib slib"):find(par.type) then
-          local ext = par.type:upper().."_EXT";
-          fn = fn_forceExt(par[1] or fn_basename(sf[1]), par.outext or self[ext] or self.toolchain[ext]);
-        else
-          fn = fn_basename(sf[1])
-          if type(par[1]) == "string" then fn = par[1].."_"..fn; end;
-          fn = fn_forceExt(fn, par.outext or self.OBJ_EXT);
-        end;
-        local of = result:new_generatedfile(par.odir, fn);
+        local fn = fn_basename(sf[1]);
+        fn = (par[1] or "*"):gsub("%*", fn);
+        fn = fn_forceExt(fn, getField("outext"));
+        local of = result:new_generatedfile(getField("odir"), fn);
         of.prerequisites = src.prerequisites;
-        of.deps          = sf;
-        of.defines       = src.defines;
-        of.cflags        = src.cflags;
-        of.incdir        = src.incdir;
-        of.libdir        = src.libdir;
-        of.libs          = src.libs;
-        of.needs         = src.needs;
-        of.from          = src.from;
-        of.tool          = self;
-        of.type          = par.type;
-        of.base          = src.base;
-        of.func          = par.func and genfunc(sf, of) or nil;
-        of.action        = par.action:gsub("$SOURCE%f[%U]", "$SOURCES");
-        for var in of.action:gmatch("$%u+%f[%U]") do
-          if not ("$SOURCES $OUTFILE"):find(var) then
-            of.action = of.action:gsub(var, "");
-            processed:add(var:sub(2):lower());
-          end;
-        end;
+        of.tool    = self;
+        of.deps    = sf;
+        of.defines = src.defines;
+        of.cflags  = src.cflags;
+        of.incdir  = src.incdir;
+        of.libdir  = src.libdir;
+        of.libs    = src.libs;
+        of.needs   = src.needs;
+        of.from    = src.from;
+        of.base    = src.base;
+        of.func    = par.func;
+        of.action  = par.action;
+        of.__par   = par;
       end;
-    else
-      result = Targets:new_generatedfile(par.odir, par[1]);
-      result.deps          = src;
-      result.defines       = src.defines;
-      result.cflags        = src.cflags;
-      result.incdir        = src.incdir;
-      result.libdir        = src.libdir;
-      result.libs          = src.libs;
-      result.needs         = src.needs;
-      result.from          = src.from;
-      result.tool          = self;
-      result.type          = par.type;
+    else -- $SOURCES => one node for ALL sources
+      local fn = par[1];
+      fn = fn_forceExt(fn, getField("outext"));
+      result = Targets:new_generatedfile(getField("odir"), fn);
       result.prerequisites = src.prerequisites;
-      result.func          = par.func and genfunc(src, result) or nil;
-      result.action        = par.action;
-      for var in result.action:gmatch("$%u+%f[%U]") do
-        if not ("$SOURCES $OUTFILE"):find(var) then
-          processed:add(var:sub(2):lower());
-        end;
-      end;
+      result.tool    = self;
+      result.deps    = src;
+      result.defines = src.defines;
+      result.cflags  = src.cflags;
+      result.incdir  = src.incdir;
+      result.libdir  = src.libdir;
+      result.libs    = src.libs;
+      result.needs   = src.needs;
+      result.from    = src.from;
+      result.type    = par.type;
+      result.func    = par.func;
+      result.action  = par.action;
+      result.__par   = par;
     end;
     --
-    par[1]     = nil;
-    par.odir   = nil;
-    par.type   = nil;
-    par.outext = nil;
-    par.func   = nil;
-    par.action = nil;
-    --
-    --self:allParamsEaten(par);
-    result.__par = par;
+    par[1] = nil;
     return result;
   end;
   
   Rule:add_action("create");
   function Rule:action_define(...)
     local par = self:checkParam(...);
-    --parameter checks ...
-    if par[1] then quitMF("rule.define(): field 'outfile name' not allowed in templates."); end;
-    -- TODO: more field checks.
-    --
-    if class(par.template, "Tool") and par.template.__par then
-      local p = {};
-      local t = par.template.__par;
-      par.template = nil;
-      for n, v in pairs(t) do p[n] = v; end;
-      for n, v in pairs(par) do p[n] = v; end;
-      par = p;
-    end;
-    --
-    local tool = clTool:new{
-      --toolchain = tc,
-      __par = par,
-    };
-    tool.__default = function(...)
-      return self.action_create(tool, ...);
-    end;
+    local toolName = par.name or "tool";
+    par.name = nil;
+    local tool = clTool:new{toolName, __par = par};
+    tool.__default = function(...) return self.action_create(tool, ...); end;
     return tool;
   end;
   
   Rule:add_action("define");
   clMakeScript.rule = Rule;
+  --
+  local File = class.Tool:new{"file",
+    __par = {
+      ext      = ".*",
+      outext   = ".*",
+      action = choose(WINDOWS, "copy", "cp") .. " $SOURCES $OUTFILE",
+    }
+  };
+  
+  function File:action_copy(...)
+    local par = self:checkParam(...);
+    local sources = self:getSources(par);
+    if type(par.odir) ~= "string" then quitMF("file.copy(): no valid 'odir' parameter."); end;
+    local targets = clTargetList:new();
+    for sf in sources() do
+      local dfn = sf[1];
+      dfn = (dfn:find(sources.base) == 1) and dfn:gsub(sources.base.."/","") or dfn:match("([^/]*)$");
+      local target = targets:new_generatedfile(par.odir, dfn);
+      target.deps = sf;
+      target.tool = self;
+      target.action = par.action or self.__par.action;
+      if not target.action then quitMF("%s(): no valid 'action' parameter given.", self[1]); end;
+    end;
+    return targets;
+  end;
+  
+  File:add_action("copy");
+  clMakeScript.file = File;
+  --
+  Group = class.Tool:new{
+    SRC_EXT = ".*";
+  };
+  
+  function Group:action_create(...)
+    local par = self:checkParam(...);
+    if not par.inputs then
+      local inputs = {};
+      for i = 1, #par do
+        inputs[i] = par[i];
+        par[i] = nil;
+      end;
+      par.inputs = inputs;
+    end;
+    local res = self:getSources(par);
+    for n in pairs(par) do quitMF("%s(): parameter '%s' not processed.", self[1] or "rule", n); end;
+    return res;
+  end;
+  
+  Group:add_action("create");
+  clMakeScript.group = Group;
+  --
 end;
 --
 do -- [special targets] =====================================================

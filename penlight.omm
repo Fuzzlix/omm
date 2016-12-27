@@ -9,7 +9,7 @@ LUA_BIN = LUA_BIN or LUAROOT.."/bin" -- install dir
 TEMPDIR = TEMPDIR or LUAROOT.."/tmp" -- dir for intermediate files
 --
 local LUAVER     = make.Needs"lua".LUAVERSION
-local TEMPDIR    = TEMPDIR .. "/lua" .. LUAVER
+local TEMPDIR    = TEMPDIR .. "/" .. LUAVER
 local MODULES    = LUAROOT
 local LUA_ETCDIR = LUA_BIN.."/etc"
 local LUA_IDIR   = LUA_BIN.."/include/" .. LUAVER

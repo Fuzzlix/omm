@@ -4,71 +4,96 @@
 M64 = true;
 OPTIMIZE = OPTIMIZE or "O2";
 --
-local choose     = make.utils.choose;
-local WINDOWS    = make.WINDOWS;
+local choose  = make.utils.choose;
+local WINDOWS = make.WINDOWS;
 --
-cc = make.newTool{
-  SRC_EXT      = ".c",
-  CMD          = "CC",
-  PROG         = "gcc",
-  OBJ_EXT      = ".o",
-  EXE_EXT      = choose(WINDOWS, ".exe", ""),
-  DLL_EXT      = choose(WINDOWS, ".dll", ".so"),
-  LIB_EXT      = ".a",
-  SW_DEPGEN    = "-MMD",
-  command_obj  = "$PREFIX$PROG$SUFFIX $OPTIMIZE -c -m64 $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-  command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
-  command_slib = "$PREFIXgcc-ar rcus $OUTFILE $SOURCES",
-  command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+c99      = rule.define {name="c99",
+  type = "obj",  
+  ext  = ".c",   -- default extension for source files
+  outext = ".o",   -- output extension for typ="obj"
+  SW_DEPGEN = "-MMD", -- compiler switch for dependency file generation.
+  action = "gcc -c -m64 -std=gnu99 $OPTIMIZE $OPTIONS $DEFINES $SOURCE $LIBS -o $OUTFILE",
 };
-cc:add_group();
-cc:add_program();
-cc:add_shared();
-cc:add_library();
---
-c99 = make.newTool{
-  SRC_EXT      = ".c",
-  OBJ_EXT      = ".o",
-  EXE_EXT      = choose(WINDOWS, ".exe", ""),
-  DLL_EXT      = choose(WINDOWS, ".dll", ".so"),
-  LIB_EXT      = ".a",
-  CMD          = "C99",
-  PROG         = "gcc",
-  SW_DEPGEN    = "-MMD",
-  command_obj  = "$PREFIX$PROG$SUFFIX -std=gnu99 $OPTIMIZE -c -m64 $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-  command_dlib = "$PREFIX$PROG$SUFFIX -std=gnu99 $OPTIMIZE -shared -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
-  command_slib = "$PREFIXgcc-ar rcus $OUTFILE $SOURCES",
-  command      = "$PREFIX$PROG$SUFFIX -std=gnu99 $OPTIMIZE -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+c99.prog = rule.define {name="c99.prog", 
+  type = "prog", 
+  ext  = ".c",   -- default extension for source files
+  outext = choose(WINDOWS, ".exe", ""),    -- output extension for typ="prog"
+  SW_DEPGEN = "-MMD", -- compiler switch for dependency file generation.
+  action = "gcc -m64 -std=gnu99 $OPTIMIZE $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
 };
-c99:add_group();
-c99:add_program();
-c99:add_shared();
-c99:add_library();
---
-cpp = make.newTool{
-  SRC_EXT      = ".cpp .cxx .C",
-  OBJ_EXT      = ".o",
-  EXE_EXT      = choose(WINDOWS, ".exe", ""),
-  DLL_EXT      = choose(WINDOWS, ".dll", ".so"),
-  LIB_EXT      = ".a",
-  CMD          = "CPP",
-  PROG         = "g++",
-  SW_DEPGEN    = "-MMD",
-  command_obj  = "$PREFIX$PROG$SUFFIX $OPTIMIZE -c -m64 $OPTIONS $DEFINES $SOURCES -o $OUTFILE",
-  command_dlib = "$PREFIX$PROG$SUFFIX $OPTIMIZE -shared -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
-  command_slib = "$PREFIXgcc-ar rcus $OUTFILE $SOURCES",
-  command      = "$PREFIX$PROG$SUFFIX $OPTIMIZE -m64 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+c99.dlib = rule.define {name="c99.dlib", 
+  type ="dlib", 
+  ext  = ".c",   -- default extension for source files
+  outext = choose(WINDOWS, ".dll", ".so"), -- output extension for typ="dlib"
+  SW_DEPGEN = "-MMD", -- compiler switch for dependency file generation.
+  action = "gcc -shared -m64 -std=gnu99 $OPTIMIZE $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
 };
-cpp:add_group();
-cpp:add_program();
-cpp:add_shared();
-cpp:add_library();
---
-wresource = make.newTool{
-  SRC_EXT   = ".rc",
-  OBJ_EXT   = ".o",
-  CMD       = "RES",
-  command   = "windres -F pe-x86-64 $OPTIONS $SOURCES $DEFINES -o $OUTFILE",
+c99.slib = rule.define {name="c99.slib", 
+  type ="slib", 
+  ext = ".o",   -- default extension for source files
+  outext = ".a",   -- output extension for typ="slib"
+  action = "ar rcus $OUTFILE $SOURCES",
 };
-wresource:add_group();
 --
+cc       = rule.define {name="cc",      
+  type = "obj",  
+  ext  = ".c",   -- default extension for source files
+  outext = ".o",   -- output extension for typ="obj"
+  SW_DEPGEN = "-MMD", -- compiler switch for dependency file generation.
+  action = "gcc -c -m64 $OPTIMIZE $OPTIONS $DEFINES $SOURCE $LIBS -o $OUTFILE",
+};
+cc.prog  = rule.define {name="cc.prog", 
+  type = "prog", 
+  ext  = ".c",   -- default extension for source files
+  outext = choose(WINDOWS, ".exe", ""),    -- output extension for typ="prog"
+  SW_DEPGEN = "-MMD", -- compiler switch for dependency file generation.
+  action = "gcc -m64 $OPTIMIZE $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+};
+cc.dlib  = rule.define {name="cc.dlib", 
+  type = "dlib", 
+  ext  = ".c",   -- default extension for source files
+  outext = choose(WINDOWS, ".dll", ".so"), -- output extension for typ="dlib"
+  SW_DEPGEN = "-MMD", -- compiler switch for dependency file generation.
+  action = "gcc -shared -m64 $OPTIMIZE $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+};
+cc.slib  = rule.define {name="cc.slib", 
+  type = "slib", 
+  ext  = ".o",   -- default extension for source files
+  outext = ".a", -- output extension for typ="slib"
+  action = "ar rcus $OUTFILE $SOURCES",
+};
+--
+cpp      = rule.define {name="cpp",      
+  type = "obj",
+  ext  = ".cpp .cxx .C", -- default extension for source files
+  outext = ".o",           -- output extension for typ="obj"
+  SW_DEPGEN = "-MMD", -- compiler switch for dependency file generation.
+  action  = "g++ -c -m64 $OPTIMIZE $OPTIONS $DEFINES $SOURCE $LIBS -o $OUTFILE",
+};
+cpp.prog = rule.define {name="cpp.prog", 
+  type = "prog", 
+  ext  = ".cpp .cxx .C", -- default extension for source files
+  outext = choose(WINDOWS, ".exe", ""),    -- output extension for typ="prog"
+  SW_DEPGEN = "-MMD", -- compiler switch for dependency file generation.
+  action = "g++ -m64 $OPTIMIZE $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+};
+cpp.dlib = rule.define {name="cpp.dlib", 
+  type = "dlib", 
+  ext  = ".cpp .cxx .C", -- default extension for source files
+  outext = choose(WINDOWS, ".dll", ".so"), -- output extension for typ="dlib"
+  SW_DEPGEN = "-MMD", -- compiler switch for dependency file generation.
+  action = "g++ -shared -m64 $OPTIMIZE $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE",
+};
+cpp.slib = rule.define {name="cpp.slib", 
+  type = "slib", 
+  ext  = ".o",   -- default extension for source files
+  outext = ".a", -- output extension for typ="slib"
+  action = "ar rcus $OUTFILE $SOURCES",
+};
+--
+res      = rule.define {name="res", 
+  type   = "obj", 
+  ext    = ".rc",
+  outext = ".o",
+  action = "windres -F pe-x86-64 $OPTIONS $SOURCE $DEFINES -o $OUTFILE",
+};

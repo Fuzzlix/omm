@@ -62,7 +62,7 @@ if luaglue == nil then -- not loaded yet?
     end;
   end;
   --- gluelua: exported rule template.
-  luaglue = rule.define {func=glue, outext=".exe", type="prog",
+  luaglue = rule.define {func=glue, outext=".exe", 
                          action="glue $SOURCE $OUTFILE $LOADER $FORCE"}
   --
 end
