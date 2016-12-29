@@ -28,7 +28,7 @@ Required 3rd party modules:
 --require "luacov"
 --_DEBUG = true;
 --
-local VERSION = "omm 0.6.2-beta\n  A lua based extensible build engine.";
+local VERSION = "omm 0.6.3-beta\n  A lua based extensible build engine.";
 local USAGE   = [=[
 Usage: OMM [options] [target[,...]]
 
@@ -1582,6 +1582,8 @@ do -- [MakeScript Sandbox] ==================================================
     WINDOWS = WINDOWS,
     assert  = assert,
     ENV     = ENV,
+    ipairs  = ipairs,
+    pairs   = pairs,
     pcall   = pcall,
     print   = print,
     require = require,
@@ -2365,38 +2367,23 @@ do -- [tools & rules] =======================================================
       end;
     end,
   });
-  
   -- utilities
   function clTool:readDepFile(TreeNode) -- return a TargetList with all included files. or nil.
-    local depfilename = fn_forceExt(TreeNode[1], ".d");
-    local f = io_open(depfilename);
-    if f then
-      local txt = {};
-      for line in f:lines() do
-        if line:find("^%s%S") then
-          line = fn_path_lua(line:gsub("^%s", ""):gsub("%s*\\$", ""));
-          line = split(line);
-          for _, fname in ipairs(line) do
-            if not (TreeNode.deps:is("SourceFile") and TreeNode.deps[1] == fname) then
-              if not txt[fname] then
-                insert(txt, fname);
-                txt[fname] = fname;
-              end;
-            end;
-          end;
-        end;
-      end;
-      f:close();
-      if #txt == 0 then return nil; end;
-      local tl = clTargetList:new();
+    local function getField(name)
+      return TreeNode.__par[name] or self.__par[name];
+    end;
+    local depFunc = getField("F_GETINCLUDES");
+    if depFunc then
+      local txt = depFunc(fn_forceExt(TreeNode[1], ".d"));
+      if not txt then return; end;
+      local tl  = clTargetList:new();
       for _, n in ipairs(txt) do
-        if not GeneratedFiles:find(n) then
+        if not (GeneratedFiles:find(n) or tl:find(n)) then
           tl:new_sourcefile(n);
         end;
       end;
       return tl;
     end;
-    return nil;
   end;
   
   function clTool:checkParam(...)
@@ -2422,10 +2409,28 @@ do -- [tools & rules] =======================================================
   end;
 
   function clTool:expand_OPTIONS(TreeNode)
+    local function getField(name)
+      --return TreeNode and TreeNode.__par[name] or self.__par[name];
+      return TreeNode.__par[name] or self.__par[name];
+    end;
+    
     local options = class.StrList:new();
     -- for non debug builds: strip debug infos from executables and dynlibs.
-    if not MakeScript.DEBUG and (TreeNode.tool.__par.type == "prog" or TreeNode.tool.__par.type == "dlib") then
-      options:add("-s");
+    local s = getField("SW_STRIP", TreeNode);
+    if not MakeScript.DEBUG and s then options:add(s); end;
+    -- dependency file generation
+    local d = getField("SW_DEPGEN", TreeNode);
+    if not MakeScript.NODEPS and d then options:add(d); end;
+    -- optimize
+    local o = getField("SW_OPTIMIZE", TreeNode);
+    if o then 
+      if o:find("%*") then
+        if MakeScript.OPTIMIZE then
+          options:add(o:gsub("%*", MakeScript.OPTIMIZE)); 
+        end;
+      else
+        options:add(o); 
+      end;
     end;
     -- insert cflags.
     if TreeNode.cflags then options:add(TreeNode.cflags:concat()); end;
@@ -2435,12 +2440,6 @@ do -- [tools & rules] =======================================================
         options:add("-I"..fn_canonical(d));
       end;
     end;
-    -- depfile generation
-    local depcmd = self.SW_DEPGEN;
-    if depcmd and not MakeScript.NODEPS and TreeNode.type == "obj" then
-      options:add(depcmd);
-    end;
-    --insert(options, "");
     return concat(options, " ");
   end;
   
@@ -2449,19 +2448,6 @@ do -- [tools & rules] =======================================================
     for ld in TreeNode.libdir() do libs:add("-L"..fn_canonical(ld)); end;
     for l in TreeNode.libs()    do libs:add("-l"..fn_canonical(l));  end;
     return concat(libs, " ");
-  end;
-  
-  function clTool:expand_OPTIMIZE()
-    if not MakeScript.DEBUG then
-      if MakeScript.OPTIMIZE then
-        if type(MakeScript.OPTIMIZE) == "string" then
-          return MakeScript.OPTIMIZE:gsub("%-?(.+)%s*","-%1");
-        else
-          quitMF("global var 'OPTIMIZE needs to be a string.")
-        end;
-      end;
-    end;
-    return "";
   end;
   
   function clTool:expand_SOURCES(TreeNode)
@@ -2491,14 +2477,14 @@ do -- [tools & rules] =======================================================
     end;
   end;
 
-  function clTool:expand_PROG(TreeNode) --TODO: error checks
-    return self.__par.prog;
+  function clTool:expand_PROG(TreeNode)
+    return TreeNode.__par["prog"] or self.__par["prog"];
   end;
   
   function clTool:build_command(TreeNode)
     local function getField(name)
       local par = TreeNode.__par;
-      return TreeNode[name] or par and par[name] or nil;
+      return TreeNode[name] or par and par[name];
     end;
     local cmdln = getField("action");
     local function genfunc(func, src, dst)
@@ -2819,6 +2805,9 @@ do -- [tools & rules] =======================================================
         of.func    = par.func;
         of.action  = par.action;
         of.__par   = par;
+        if class(sf, "SourceFile") then
+          sf.deps    = (not MakeScript.NODEPS and self:readDepFile(of)) or nil;
+        end;
       end;
     else -- $SOURCES => one node for ALL sources
       local fn = par[1];
