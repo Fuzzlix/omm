@@ -1227,7 +1227,7 @@ do -- [error handling] ======================================================
   end;
   
   function warningMF(reason, ...)
-    if not Make or Make.options.verbose or Make.options.print_warnings then
+    --if not Make or Make.options.verbose or Make.options.print_warnings then
       reason = reason or '?';
       local i = 0;
       local info;
@@ -1239,7 +1239,7 @@ do -- [error handling] ======================================================
         ("%s:%1.0d: - "):format(fn_canonical(info.short_src), info.currentline) ..
         reason:format(...) .. "\n"
       );
-    end;
+    --end;
   end;
   
   function quit(reason, ...)
