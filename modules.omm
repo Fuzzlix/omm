@@ -1,5 +1,6 @@
 --- makefile for lua-modules
 --
+make "idle"
 make "lfs"
 make "lpeg"
 make "winapi"

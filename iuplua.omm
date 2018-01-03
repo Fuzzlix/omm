@@ -33,8 +33,8 @@ if make.utils.isDir("iuplua") and not make.Targets("iup") then --iup
                win/iupwin_button.c win/iupwin_draw.c win/iupwin_toggle.c win/iupwin_clipboard.c \z
                win/iupwin_progressbar.c win/iupwin_text.c win/iupwin_val.c win/iupwin_touch.c \z
                win/iupwin_tabs.c win/iupwin_menu.c win/iupwin_list.c win/iupwin_tree.c \z
-               win/iupwin_calendar.c win/iupwin_datepick.c \z
-               win/iupwindows_nomain.c win/iupwindows_help.c win/iupwindows_info.c"
+               win/iupwin_calendar.c win/iupwin_datepick.c"-- \z
+               --win/iupwindows_nomain.c win/iupwindows_help.c win/iupwindows_info.c"
   local DEFINES  = "_WIN32_WINNT=0x0501 _WIN32_IE=0x600 WINVER=0x0501 NOTREEVIEW UNICODE"
   if DEBUG then DEFINES = DEFINES .. " IUP_ASSERT"; end;
   local SRCDIR   = IUPROOT.. "/src";
