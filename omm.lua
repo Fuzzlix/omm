@@ -916,7 +916,6 @@ do
       end;
     }
   );
-  
   --
   update_pwd();
   --
@@ -1282,10 +1281,8 @@ do -- [error handling] ======================================================
 end;
 --
 --=== [commandline parameter] ===============================================
-local cmdl;
+local cmdl = require "Cmdl";
 do
-  --
-  cmdl = require "Cmdl";
   cmdl.argsd = {
     { tag = "build", 
       cmd = {'-B', "--build-all"}, 
