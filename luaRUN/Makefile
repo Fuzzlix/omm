@@ -4,7 +4,7 @@ default: all
 
 #========================================= [start user config] ==
 # LUAVER := 51|52|53 (luaJit=51)
-LUAVER	?=	53
+LUAVER	?=	51
 #
 # LUAROOT: your lua root folder.
 LUAROOT	?=	../_install32
@@ -14,14 +14,10 @@ LUAINCL ?=	$(LUAROOT)/include/$(LUAVER)
 #
 # PRELOAD_MODS: names of the static lua libs to link into exe
 #PRELOAD_MODS ?= lfs lpeg winapi lsqlite3 lanes.core socket.core mime.core iuplua
-#PRELOAD_MODS ?= lfs lpeg winapi iuplua
-PRELOAD_MODS ?= lfs lpeg winapi
+#PRELOAD_MODS ?= lfs lpeg iuplua idle
 #
+ICON	?=	lua
 
-#
-#ICON	?=	lua_small
-#ICON	?=	lua
-ICON	?=	omm
 #=========================================== [end user config] ==
 
 E	=	@echo 
@@ -37,8 +33,8 @@ LUALIBS	:=	$(LUAROOT)/lua$(LUAVER).dll
 CCOPT	+=	
 DS_FLAG	=	D$(LUAVER)
 MODS_	=
-CLISTUB	=	true
-GUISTUB	=	true	
+CLISTUB	?=	true
+GUISTUB	?=	true	
 else
 # PRELOAD_MODS defined -> link static libs into exe.
 LUALIBS :=	$(LUAROOT)/include/$(LUAVER)/lua$(LUAVER).a -lws2_32 -lpsapi -lmpr
@@ -61,11 +57,11 @@ preload:
 MODLIBS	= $(patsubst %,$(LUAINCL)/%$(LUAVER).a,$(subst .,_,$(PRELOAD_MODS)))
 MODS_	= $(LUAVERSION)$(if $(PRELOAD_MODS),_$(subst $(SPACE) ,_,$(subst _core,,$(subst .,_,$(sort $(PRELOAD_MODS))))))
 ifeq "$(findstring iuplua, $(PRELOAD_MODS))" "iuplua"
-  CLISTUB =
-  GUISTUB =	true	
+  CLISTUB ?=
+  GUISTUB ?=	true	
 else
-  CLISTUB =	true
-  GUISTUB =
+  CLISTUB ?=	true
+  GUISTUB ?=
 endif
 endif
 #
@@ -76,13 +72,16 @@ WSRLUA	= wsrlua$(DS_FLAG)$(MODS_).exe
 DGLUE	= glue$(DS_FLAG)$(MODS_).exe
 WGLUE	= wGlue$(DS_FLAG)$(MODS_).exe
 
-.phony: all clean
+.phony: all clean CLEAN
 all:	$(if $(PRELOAD_MODS),preloaddef preload) \
 	miniglue.exe \
 	$(if $(CLISTUB),$(DGLUE)) \
 	$(if $(GUISTUB),$(WGLUE)) 
 clean:
-	$(if $(wildcard *.exe *.inc),@$(RM) $(wildcard *.exe *.inc))
+	$(if $(wildcard *.inc, *.rc *.obj miniglue.exe wsrlua*.exe),@$(RM) $(wildcard *.inc *.rc *.obj miniglue.exe wsrlua*.exe))
+	$(E) clean
+CLEAN:
+	$(if $(wildcard *.exe *.inc, *.rc *.obj),@$(RM) $(wildcard *.exe *.inc *.rc *.obj))
 	$(E) CLEAN
 $(WSRLUA): loader.c $(ICON).obj $(MODLIBS) $(if $(PRELOAD_MODS),| preloaddef preload)
 	$(E) EXE	$@
@@ -92,18 +91,18 @@ $(WSRLUA): loader.c $(ICON).obj $(MODLIBS) $(if $(PRELOAD_MODS),| preloaddef pre
 $(DSRLUA): loader.c $(ICON).obj $(MODLIBS) $(if $(PRELOAD_MODS),| preloaddef preload) 
 	$(E) EXE	$@
 	$(CC) $(CCOPT) -DDOS_LOADER -I$(LUAINCL) -o $@ $^ $(LUALIBS) 
-$(WGLUE): wglue.lua $(WSRLUA) | miniglue.exe
+$(WGLUE): wglue.wlua $(WSRLUA) | miniglue.exe
 	$(E) GLUE	$@
-	@miniglue $(WSRLUA) wglue.lua $@
+	@miniglue $(WSRLUA) wglue.wlua $@
 $(DGLUE): glue.lua $(DSRLUA) | miniglue.exe
 	$(E) GLUE	$@
 	@miniglue $(DSRLUA) glue.lua $@
 miniglue.exe: miniglue.c
 	$(E) EXE	$@
 	$(CC) $(CCOPT) -o $@ $^
-%.obj: %.rc
+$(ICON).obj: $(ICON).rc
 	$(E) RES	$@
 	@windres  -F pe-i386 $^ $@
-%.rc: %.ico
+$(ICON).rc: $(ICON).ico
 	$(E) RC	$@
 	@echo 0  ICON "$^" > $@

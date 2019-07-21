@@ -40,115 +40,124 @@
 #define argc __argc
 #define argv __argv
 
+#if LUA_VERSION_NUM  == 501
+  #define LUA_LOAD(L, F, B, N) lua_load(L, F, B, N)
+#else
+  #define LUA_LOAD(L, F, B, N) lua_load(L, F, B, N, NULL);
+#endif
+
 // minimalistic lua loader. used in case, no glued lua chunk found.
 static const char *luacode = "dofile(arg[0]:sub(1,-5)..'.lua')";
 
 char * szAppName; //char szAppName[MAX_PATH];
 #if defined(GUI_LOADER)
-void printErr(const char *s, const char *h) {
-  MessageBox(NULL, s, h, MB_OK|MB_ICONERROR);
-}
+  void printErr(const char *s, const char *h) {
+    MessageBox(NULL, s, h, MB_OK|MB_ICONERROR);
+  }
 #else
-void printErr(const char *s, const char *h) {
-  printf(s);
-}
+  void printErr(const char *s, const char *h) {
+    printf(s);
+  }
 #endif
 
 static int report(lua_State *L, int status) {
   if (status && !lua_isnil(L, -1)) {
-    const char *msg = lua_tostring(L, -1);                        // [-0, +0, m]
+    const char *msg = lua_tostring(L, -1);                      // [-0, +0, m]
     if (msg == NULL) msg = "(error object is not a string)";
-    luaL_gsub(L, msg, szAppName, "");                             // [-0, +1, m]
-    lua_remove(L, -2);                                            // [-1, +0, -]
-    luaL_gsub(L, lua_tostring(L, -1), "\t", "  ");                // [-0, +1, m]
-    lua_remove(L, -2);                                            // [-1, +0, -]
+    luaL_gsub(L, msg, szAppName, "");                           // [-0, +1, m]
+    lua_remove(L, -2);                                          // [-1, +0, -]
+    luaL_gsub(L, lua_tostring(L, -1), "\t", "  ");              // [-0, +1, m]
+    lua_remove(L, -2);                                          // [-1, +0, -]
     printErr(lua_tostring(L, -1), TEXT("LUA Error"));
-    lua_pop(L, 1);                                                // [-n, +0, -]
+    lua_pop(L, 1);                                              // [-n, +0, -]
     lua_gc(L, LUA_GCCOLLECT, 0);
   }
   return status;
 }
 
 #if LUA_VERSION_NUM  == 501
-static int traceback (lua_State *L) {
-  if (!lua_isstring(L, 1))  /* 'message' not a string? */
-    return 1;  /* keep it intact */
-  lua_getfield(L, LUA_GLOBALSINDEX, "debug");
-  if (!lua_istable(L, -1)) {
-    lua_pop(L, 1);
+  static int traceback (lua_State *L) {
+    if (!lua_isstring(L, 1))  /* 'message' not a string? */
+      return 1;  /* keep it intact */
+    lua_getfield(L, LUA_GLOBALSINDEX, "debug");                  // [-0, +1, e]
+    if (!lua_istable(L, -1)) {
+      lua_pop(L, 1);                                             // [-n, +0, -]
+      return 1;
+    }
+    lua_getfield(L, -1, "traceback");                            // [-0, +1, e]
+    if (!lua_isfunction(L, -1)) {
+      lua_pop(L, 2);                                             // [-n, +0, -]
+      return 1;
+    }
+    lua_pushvalue(L, 1);  // pass error message                  // [-0, +1, –]
+    lua_pushinteger(L, 2);// skip this function and traceback    // [-0, +1, –]
+    lua_call(L, 2, 1);    // call debug.traceback // [-(nargs+1), +nresults, e]
     return 1;
-  }
-  lua_getfield(L, -1, "traceback");
-  if (!lua_isfunction(L, -1)) {
-    lua_pop(L, 2);
-    return 1;
-  }
-  lua_pushvalue(L, 1);  /* pass error message */
-  lua_pushinteger(L, 2);  /* skip this function and traceback */
-  lua_call(L, 2, 1);  /* call debug.traceback */
-  return 1;
-} 
+  } 
 #else
-static int traceback (lua_State *L) {
-  const char *msg = lua_tostring(L, 1);
-  if (msg)
-    luaL_traceback(L, L, msg, 1);
-  else if (!lua_isnoneornil(L, 1)) {  /* is there an error object? */
-    if (!luaL_callmeta(L, 1, "__tostring"))  /* try its 'tostring' metamethod */
-      lua_pushliteral(L, "(no error message)");
+  static int traceback (lua_State *L) {
+    const char *msg = lua_tostring(L, 1);                        // [-0, +0, m]
+    if (msg)
+      luaL_traceback(L, L, msg, 1);
+    else if (!lua_isnoneornil(L, 1)) {
+      // there is an error object? 
+      if (!luaL_callmeta(L, 1, "__tostring")) 
+        // try its 'tostring' metamethod 
+        lua_pushliteral(L, "(no error message)");                // [-0, +1, m]
+    }
+    return 1;
   }
-  return 1;
-}
 #endif
 
 #ifdef GLUE_LOADER
-#define GLUESIG     "%%glue:L"
-#define GLUELEN     (sizeof(GLUESIG)-1)
-#define GLUETYP     (sizeof(GLUESIG)-2)
-typedef struct { char sig[GLUELEN]; long size1, size2; } Glue;
-typedef struct { FILE *f; long size; char buff[512]; } State;
-
-Glue  GlueInfo; 
-State S;
-
-static int glue_found() {
-  S.f = fopen(szAppName, "rb");
-  if (S.f == NULL) return 0;
-  if ((fseek(S.f, (long int)(-sizeof(GlueInfo)), SEEK_END) == 0) && 
-      (fread(&GlueInfo, sizeof(GlueInfo), 1, S.f) == 1) && 
-      (memcmp(GlueInfo.sig, GLUESIG, GLUELEN) == 0) &&
-      (fseek(S.f, GlueInfo.size1, SEEK_SET) == 0))
-    return 1;
-  fclose(S.f);
-  return 0;
-}
-
-const char* myget(lua_State *L, void *data, size_t *size) {
-  State *s = data;
-  size_t n;
-  if (s->size <= 0) return NULL;
-  n = (sizeof(s->buff) <= s->size) ? sizeof(s->buff) : s->size;
-  n = fread(s->buff, 1, n, s->f);
-  if (n == -1) return NULL;
-  s->size -= n;
-  *size = n;
-  return s->buff;
-}
-
-static int loadGlue(lua_State *L) {
-  if (S.f == NULL) {
-    lua_pushstring(L, "cant read loader.");
-    return 1;
-  };
-  S.size = GlueInfo.size2;
-#if LUA_VERSION_NUM  == 501
-  int err = lua_load(L, myget, &S, "MAIN");
-#else
-  int err = lua_load(L, myget, &S, "MAIN", NULL);
-#endif
-  fclose(S.f);
-  return err;
-}
+  #define GLUESIG     "%%glue:L"
+  #define GLUELEN     (sizeof(GLUESIG)-1)
+  #define GLUETYP     (sizeof(GLUESIG)-2)
+  typedef struct { char sig[GLUELEN]; long size1, size2; } Glue;
+  typedef struct { FILE *f; long size; char buff[512]; } State;
+  
+  Glue  GlueInfo; 
+  State S;
+  
+  static int glue_found() {
+    S.f = fopen(szAppName, "rb");
+    if (S.f == NULL) return 0;
+    if ((fseek(S.f, (long int)(-sizeof(GlueInfo)), SEEK_END) == 0) && 
+        (fread(&GlueInfo, sizeof(GlueInfo), 1, S.f) == 1) && 
+        (memcmp(GlueInfo.sig, GLUESIG, GLUELEN) == 0) &&
+        (fseek(S.f, GlueInfo.size1, SEEK_SET) == 0))
+      return 1;
+    fclose(S.f);
+    return 0;
+  }
+  
+  const char* myget(lua_State *L, void *data, size_t *size) {
+    State *s = data;
+    size_t n;
+    if (s->size <= 0) return NULL;
+    n = (sizeof(s->buff) <= s->size) ? sizeof(s->buff) : s->size;
+    n = fread(s->buff, 1, n, s->f);
+    if (n == -1) return NULL;
+    s->size -= n;
+    *size = n;
+    return s->buff;
+  }
+  
+  static int loadGlue(lua_State *L) {
+    if (S.f == NULL) {
+      lua_pushstring(L, "cant read loader.");
+      return 1;
+    };
+    S.size = GlueInfo.size2;
+    int err = LUA_LOAD(L, myget, &S, "MAIN");                  // [-0, +1, –]
+    //#if LUA_VERSION_NUM  == 501
+    //  int err = lua_load(L, myget, &S, "MAIN");
+    //#else
+    //  int err = lua_load(L, myget, &S, "MAIN", NULL);
+    //#endif
+    fclose(S.f);
+    return err;
+  }
 
 #endif //GLUE_LOADER
 
@@ -170,7 +179,7 @@ static int loadGlue(lua_State *L) {
       lua_pushcfunction(L, lib->func);
       lua_setfield(L, -2, lib->name);
     }
-    lua_pop(L, 1);
+    lua_pop(L, 1);                                             // [-n, +0, -]
   }
 #else
   #define preload_libs(L) 
@@ -216,7 +225,7 @@ int main() {
 }
 
 #if defined(GUI_LOADER)
-int WINAPI WinMain(HINSTANCE hInstance,  HINSTANCE hPrevInstance,  LPSTR lpCmdLine, int nCmdShow) {
-  return main();
-}
+  int WINAPI WinMain(HINSTANCE hInstance,  HINSTANCE hPrevInstance,  LPSTR lpCmdLine, int nCmdShow) {
+    return main();
+  }
 #endif

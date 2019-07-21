@@ -45,7 +45,7 @@ static long copy(const char* name, FILE* out, const char* outname)
 
 int main(int argc, char* argv[])
 {
- Glue t= { GLUESIG, 0, 0 };
+ Glue t = { GLUESIG, 0, 0 };
  FILE* f;
  if (argc < 4)
  {

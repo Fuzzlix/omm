@@ -19,8 +19,12 @@ local TEMPDIR      = TEMPDIR.."/"..LUA_VERSION
 local CFLAGS       = CFLAGS .. " -fomit-frame-pointer"
 if M32 then CFLAGS = CFLAGS .. " -march=i686" end
 
-if not make.utils.isDir("luaJIT20") and svn then
-  svn.checkout{"luaJIT20", "https://github.com/Fuzzlix/lua5/branches/JIT20"}
+if not make.utils.isDir("luaJIT20") then
+  if git then
+    git.checkout{"luaJIT20", "https://github.com/Fuzzlix/LUA5.git"}
+  elseif svn then
+    svn.checkout{"luaJIT20", "https://github.com/Fuzzlix/LUA5/tree/JIT20"}
+  end;
 end
 --
 local MINILUA = make.utils.which("luajit") or 
@@ -82,10 +86,10 @@ local LUAINC  = file {src="lua.h luaconf.h lualib.h lauxlib.h", base=JIT_SRC_DIR
 local LUADOC  = file {src="*", base=JIT_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/luajit/doc"}
 local LUAJIT  = file {src="*.lua", base=JIT_SRC_DIR.."/jit", odir=LUA_CDIR.."/jit", inputs=VMDEF}
 --
-local LUA     = {LUAEXE, LUADLL, LUALIB, LUAINC, LUAJIT, LUADOC}
+local LUA     = {LUAEXE, LUADLL, LUALIB, LUAINC, LUAJIT, LUADOC};
 
-target("luajit", LUA)
-default(LUA)
+target("luajit", LUA);
+default(LUA);
 --
 define_need{'luajit',  -- luajit, dynamically linked libs
   libs          = "lua51", 

@@ -1,17 +1,17 @@
 --
 local insert, remove = table.insert, table.remove;
 --
-if not make.utils.which("svn"..make.utils.choose(WINDOWS, ".exe", "")) then 
-  warning("'svn' not found in path.");
+if not make.utils.which("git"..make.utils.choose(WINDOWS, ".exe", "")) then 
+  warning("'git' not found in path.");
   return; 
 end;
 --
-svn = make.newTool();
+git = make.newTool();
 --
 local dirlist = {};
-function svn:action_checkout(...)
+function git:action_checkout(...)
   local par = self:checkParam(...);
-  local dir, url;
+  local dir, url, branch;
   if par.odir then
     dir = par.odir;
     par.odir = nil;
@@ -31,23 +31,33 @@ function svn:action_checkout(...)
     url = par[1];
     remove(par, 1);
   end;
-  if type(dir) ~= "string" then quitMF("no valid odir given."); end;
-  local fnx = dir..".svn";
-  if not make.options.forcesvncheckout then
-    if type(url) ~= "string" then quitMF("no valid url given."); end;
-    if make.utils.exists(dir) and not make.utils.isDir(dir) then make.quitMF("cant overwrite '%s'.", dir); end;
-    local filetime_delta = os.time() - make.utils.filetime(fnx);
-    if filetime_delta < 86400 and make.utils.exists(dir) then return; end; -- checkout at least 24 hours old ?
+  if par.branch then
+    branch = par.branch;
+    par.branch = nil;
+  else
+    branch = par[1];
+    remove(par, 1);
   end;
-  local cmd = "svn checkout " .. url .. " " .. dir;
+  if type(dir) ~= "string" then quitMF("no valid odir given."); end;
+  local fnx = dir..".git";
+  if not make.options.forcegitscheckout then
+    if type(url) ~= "string" then quitMF("no valid url given."); end;
+    if make.utils.exists(dir) and not make.utils.isDir(dir) then
+      make.quitMF("cant overwrite '%s'.", dir); 
+    end;
+    local filetime_delta = os.time() - make.utils.filetime(fnx);
+    -- checkout at least 24 hours old ?
+    if filetime_delta < 86400 and make.utils.exists(dir) then return; end;
+  end;
+  local cmd = "git checkout " .. url .. " " .. dir;
   if make.options.verbose then
     print(cmd);
   elseif not make.options.quiet then
-    print("SVN-CO "..url);
+    print("GIT-CO "..url);
   end;
   
   if not make.utils.execute(cmd, make.options.quiet) then
-    quitMF("svn checkout failed.");
+    quitMF("git checkout failed.");
   else 
     dirlist[dir] = true;
     local f = io.open(fnx,"w+");
@@ -57,14 +67,14 @@ function svn:action_checkout(...)
     end;
   end;
 end;
-svn:add_action("checkout");
+git:add_action("checkout");
 --
 -- add toolchain specific commandline switches
 local cmdl = require "Cmdl";
 insert(cmdl.argsd,
-  { tag = "forcesvncheckout", 
-    cmd = {'-sfc', "--svn-force-checkout"}, 
-    descr = "force all svn checkouts. (default: every 24 hours)",
+  { tag = "forcegitscheckout", 
+    cmd = {'-gfc', "--git-force-checkout"}, 
+    descr = "force all git checkouts. (default: every 24 hours)",
     blockedby = {"printhelp", "printversion"},
   }
 );

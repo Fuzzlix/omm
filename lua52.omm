@@ -25,22 +25,23 @@ if not make.utils.isDir("lua-5.2") then
   svn.checkout{"lua-5.2", "https://github.com/Fuzzlix/lua5/branches/52"}
 end
 --
-local LUAICON = res {"lua52_*",  src="icon",   base=LUA_SRC_DIR, odir=TEMPDIR}
-local LUAICN2 = res {"luac52_*", src="icon",   base=LUA_SRC_DIR, odir=TEMPDIR}
-local LUA_C   = c99 {"lua52_*",  src="lua",    base=LUA_SRC_DIR, odir=TEMPDIR, from="lua52:defines",  cflags=CFLAGS}
-local LUAC_C  = c99 {"lua52_*",  src="luac",   base=LUA_SRC_DIR, odir=TEMPDIR, from="lua52s:defines", cflags=CFLAGS}
-local LIB_C   = c99 {"lua52s_*", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua52s:defines", cflags=CFLAGS}
-local DLL_C   = c99 {"lua52d_*", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua52:defines",  cflags=CFLAGS}
+local LUAICON = res {"lua52icon", src="icon", base=LUA_SRC_DIR, odir=TEMPDIR} -- icon resources
+local LUAICN2 = res {"luac52icon",src="icon", base=LUA_SRC_DIR, odir=TEMPDIR} -- icon resources
+local LUA_C   = c99 {"lua52", src="lua", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua52:defines", cflags=CFLAGS}       -- lua program c source
+local LUAC_C  = c99 {"luac52", src="luac", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua52s:defines", cflags=CFLAGS}     -- luac program c source
+local LIB_C   = c99 {"lua52_s_*", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua52s:defines", cflags=CFLAGS} -- static lib c source
+local DLL_C   = c99 {"lua52_d_*", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua52:defines", cflags=CFLAGS}  -- dynamic lib c source
 --
-local LUALIB  = c99.slib {'lua52',  odir=LUA_IDIR, inputs=LIB_C}
-local LUADLL  = c99.dlib {'lua52',  odir=LUA_BIN,  inputs=DLL_C}
-local LUAEXE  = c99.prog {'lua52',  odir=LUA_BIN,  inputs={LUA_C, LUAICON, LUADLL}}   
-local LUAC    = c99.prog {'luac52', odir=LUA_BIN,  inputs={LUAC_C, LUAICN2, LUALIB}} 
+local LUALIB  = c99.slib {'lua52', odir=LUA_IDIR, inputs=LIB_C}                     -- static lua runtime lib
+local LUADLL  = c99.dlib {'lua52', odir=LUA_BIN, inputs=DLL_C}                      -- dynamic lua runtime lib
+local LUAEXE  = c99.prog {'lua52', odir=LUA_BIN, inputs={LUA_C, LUAICON, LUADLL}}   -- lua executable
+local LUAC    = c99.prog {'luac52', odir=LUA_BIN, inputs={LUAC_C, LUAICN2, LUALIB}} -- luac executable
 --
 local LUAINC  = file {src="lua.h lua.hpp luaconf.h lualib.h lauxlib.h", base=LUA_SRC_DIR, odir=LUA_IDIR}
 local LUADOC  = file {src="*", base=LUA_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/lua52/doc"}
+local LUAETC  = file {src="*.ico", base=LUA_SRC_DIR.."/../etc", odir=LUA_IDIR}
 --
-local LUA = group {LUAEXE, LUAC, LUALIB, LUADLL, LUAINC, LUADOC}
+local LUA = group {LUAEXE, LUAC, LUAINC, LUADOC, LUAETC}
 
 target("lua52", LUA)
 
@@ -64,6 +65,6 @@ define_need{'lua52s', -- lua52, statically linked libs
   LUAVERSION    = LUA_VERSION
 };
 --
-define_need "lua = lua52"   -- need alias.
-define_need "luas = lua52s" -- need alias.
+make.Needs "lua = lua52"   -- need alias.
+make.Needs "luas = lua52s" -- need alias.
 

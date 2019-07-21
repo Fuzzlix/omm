@@ -1,9 +1,9 @@
 --[[-------------------------------------------------------------------------
 ##OMM, a lua based extensible build engine.
 
-Inspired by and stealing code snippets from Steve Donovan's [lake][].  
+Inspired by and stealing code snippets from Steve Donovan's [lake][].
 
-Using modified versions of 
+Using modified versions of
 Roland Yonaba's [30log][] and
 god6or@gmail.com's [os.cmdl][].
 
@@ -24,11 +24,12 @@ Required 3rd party modules:
 @copyright 2016
 @license MIT/X11
 --]]-------------------------------------------------------------------------
---
+--luacheck: globals arg _DEBUG
 --require "luacov"
 --_DEBUG = true;
 --
-local VERSION = "omm 0.6.3-beta\n  A lua based extensible build engine.";
+local VERSION = "1.0";
+local MSG1 = "omm 1.0.0 (2019/07/21)\n  A lua based extensible build engine.\n";
 local USAGE   = [=[
 Usage: OMM [options] [target[,...]]
 
@@ -48,23 +49,23 @@ local INCLUDESCRIPTEXT = ".omi";
 --
 -- [] =======================================================================
 --
-local table_sort, io_popen, io_stderr, io_open, os_remove, os_getenv, os_tmpname, os_exit = 
+local table_sort, io_popen, io_stderr, io_open, os_remove, os_getenv, os_tmpname, os_exit =
       table.sort, io.popen, io.stderr, io.open, os.remove, os.getenv, os.tmpname, os.exit;
-local print, concat,       insert,       remove,       max,      min,      tointeger = 
+local print, concat,       insert,       remove,       max,      min,      tointeger =
       print, table.concat, table.insert, table.remove, math.max, math.min, math.tointeger;
 local pairs, ipairs, type, getmetatable, rawget, select, error, os_execute, package =
       pairs, ipairs, type, getmetatable, rawget, select, error, os.execute, package;
-local pcall, require, loadfile, setmetatable, tonumber, setfenv, debug_getinfo = 
+local pcall, require, loadfile, setmetatable, tonumber, setfenv, debug_getinfo =
       pcall, require, loadfile, setmetatable, tonumber, setfenv, debug.getinfo;
 --
 -- [] =======================================================================
 --
-package.preload["33log"]  = function(...) 
+package.preload["33log"]  = function(...) --luacheck: ignore
   local pairs, ipairs, type, getmetatable, rawget, select =
         pairs, ipairs, type, getmetatable, rawget, select;
   local setmetatable = setmetatable;
   local insert       = table.insert;
-  
+
   local classes = {}; -- all classes indexed by her classname.
   
   local class;
@@ -95,19 +96,19 @@ package.preload["33log"]  = function(...)
   end;
     
   local function class_is(self, kind)
-    if not rawget(self, "__classname") then 
-      self = getmetatable(self); 
+    if not rawget(self, "__classname") then
+      self = getmetatable(self);
     end;
-    if type(kind) == "string" then 
-      kind = split(kind); 
+    if type(kind) == "string" then
+      kind = split(kind);
     end;
     for _, n in ipairs(kind) do
       local kMT = classes[n];
       if kMT then
         local s = self;
-        while s do 
-          if s == kMT then 
-            return true; 
+        while s do
+          if s == kMT then
+            return true;
           end;
           s = getmetatable(s);
         end;
@@ -123,42 +124,42 @@ package.preload["33log"]  = function(...)
     else
       var, kind = select(1, ...);
     end;
-    if type(var) ~= "table"   then 
-      return false; 
+    if type(var) ~= "table"   then
+      return false;
     end;
-    if var.is ~= class_is     then 
-      return false; 
+    if var.is ~= class_is     then
+      return false;
     end;
-    if not kind               then 
-      return true; 
+    if not kind               then
+      return true;
     end;
-    if type(kind) == "string" then 
-      return class_is(var, kind); 
+    if type(kind) == "string" then
+      return class_is(var, kind);
     end;
-    if isClass(kind)          then 
-      return class_is(var, kind.__classname); 
+    if isClass(kind)          then
+      return class_is(var, kind.__classname);
     end;
     if type(kind) == "table"  then
       for _, k in ipairs(kind) do
-        if isClass(var, k) then 
-          return true; 
+        if isClass(var, k) then
+          return true;
         end;
       end;
       return false;
     end;
     error("isClass(); wrong parameter 'kind'.", 2);
   end;
-    
+
   local function class_newindex(self, field, value)
     local mt = getmetatable(self);
     if mt[field] == nil then
       rawset(self, field, value);
-    else  
+    else
       error(('%s field "%s" is readonly.'):format(self, field), 2)
     end;
   end;
-  
-  local function class_new(self, ...) 
+
+  local function class_new(self, ...)
     if rawget(self,'__classname') == nil then error('new() should be called from a class.', 2) end;
     local instance = setmetatable({}, self);
     if self.init then
@@ -169,7 +170,7 @@ package.preload["33log"]  = function(...)
   
   local function class_singleton(self, ...)
     local o = self:new(...);
-    self.new = function(self, ...)
+    self.new = function()
       return o;
     end;
     return o;
@@ -185,14 +186,14 @@ package.preload["33log"]  = function(...)
     newClass.__classname = name or "class#" .. #classes+1;
     newClass.super       = self;
     newClass             = setmetatable(newClass, self);
-    if classes[newClass.__classname] then 
-      error(("subclass(): class '%s' already defined."):format(newClass.__classname), 2); 
+    if classes[newClass.__classname] then
+      error(("subclass(): class '%s' already defined."):format(newClass.__classname), 2);
     end;
     if name then classes[name] = newClass; end;
     return newClass;
   end;
   
-  local function class_protect(self) 
+  local function class_protect(self)
     if rawget(self,'__classname') == nil then error('protect() should be called from a class.', 2) end;
     rawset(self, "__newindex", class_newindex);
   end;
@@ -203,7 +204,7 @@ package.preload["33log"]  = function(...)
   end;
   
   local function class_init(self, param)
-    if type(param) == "table" then 
+    if type(param) == "table" then
       for n, v in pairs(param) do
         self[n] = v;
       end;
@@ -212,9 +213,9 @@ package.preload["33log"]  = function(...)
   end;
   --
   local clBase = {
-    __classname  = "base";            
+    __classname  = "base";
     __index      = class_index;
-    init         = class_init;         
+    init         = class_init;
     new          = class_new;
     singleton    = class_singleton;
     is_singleton = class_is_singleton;
@@ -236,7 +237,7 @@ package.preload["33log"]  = function(...)
   return class;
 end;
 
-package.preload["33list"] = function(...) 
+package.preload["33list"] = function(...) --luacheck: ignore
   local concat, insert, remove = table.concat, table.insert, table.remove;
   local error = error;
   --
@@ -265,7 +266,7 @@ package.preload["33list"] = function(...)
   end;
   
   clList.add     = function(self, tbl)
-    if type(tbl) == "table" then 
+    if type(tbl) == "table" then
       for _, v in ipairs(tbl) do insert(self, v); end;
     end;
     return self;
@@ -313,17 +314,17 @@ package.preload["33list"] = function(...)
     self.__dir = {};
     local kf = self.__key;
     for _, obj in ipairs(self) do
-      if self.__dir[obj[kf]] then 
-        error(("<class %s> double key detected."):format(self.__classname)); 
+      if self.__dir[obj[kf]] then
+        error(("<class %s> double key detected."):format(self.__classname));
       end;
       self.__dir[obj[kf]] = obj;
     end;
     return self;
   end;
-  
+
   clUList.add      = function(self, item)
     local kf = self.__key or 1;
-    if class(item, self.__allowed) then 
+    if class(item, self.__allowed) then
       if self.__dir[item[kf]] then
         error(("cant overwrite value '%s'"):format(item[kf]));
         --return nil, self.__dir[item[kf]];
@@ -331,9 +332,9 @@ package.preload["33list"] = function(...)
         insert(self, item);
         self.__dir[item[kf]] = item;
       end;
-    elseif type(item) == "table" then  
-      for _, v in ipairs(item) do 
-        self:add(v); 
+    elseif type(item) == "table" then
+      for _, v in ipairs(item) do
+        self:add(v);
       end;
     else
       error("parameter needs to be a object or a list of objects.", 2);
@@ -365,11 +366,11 @@ package.preload["33list"] = function(...)
   --
   local clStrList  = clList:subclass("StrList");
   
-  clStrList.init   = function(self, stringlist, ...)
+  clStrList.init   = function(self, stringlist)
     self.__dir = {};
     if stringlist then
-      if type(stringlist) == "string" then 
-        stringlist = {stringlist}; 
+      if type(stringlist) == "string" then
+        stringlist = {stringlist};
       end;
       for _, s in ipairs(stringlist) do
         self:add(s)
@@ -395,12 +396,12 @@ package.preload["33list"] = function(...)
       end;
     end;
     
-    if type(item) == "string" then 
+    if type(item) == "string" then
       item = split(item, delim);
     end;
-    if type(item) == "table" then  
-      for _, v in ipairs(item) do 
-        if type(v) ~= "string" then 
+    if type(item) == "table" then
+      for _, v in ipairs(item) do
+        if type(v) ~= "string" then
           error("clStrList.add(): parameter needs to be a string or a list of strings.", 2);
         end;
         if #v > 0 and not self.__dir[v] then
@@ -425,7 +426,7 @@ package.preload["33list"] = function(...)
   return class;
 end;
 
-package.preload["Cmdl"]   = function(...) 
+package.preload["Cmdl"]   = function(...) --luacheck: ignore
   local insert, concat = table.insert, table.concat;
   local tonumber, table_sort = tonumber, table.sort;
   
@@ -449,21 +450,21 @@ package.preload["Cmdl"]   = function(...)
   
   --[[ Parse command line parameters.
   
-   input:   argv, argsd,     
+   input:   argv, argsd,
    default: arg,  cmdl.argsd,
      argv - array of command line arguments,
      argsd - array of tables, each table describes a single command, and its fields:
        tag - short tag used as parameter key in results table,
        cmd - commands synonyms array e.g. {'-h','--help','/?'},
        descr - command description (used to generate help text),
-       def - list of default values, when the switch is found without parameters. 
+       def - list of default values, when the switch is found without parameters.
        default - list of default values to use, when this switch is not found.
        multiple - if true, allows this command multiple times
-                  if false the 2nd occurance creates a error. 
+                  if false the 2nd occurance creates a error.
        params - list of command parameters descriptors, each table containing fields:
-         t - parameter type: 
-             str   (string - default), 
-             int   (integer - bin/oct/hex/dec), 
+         t - parameter type:
+             str   (string - default),
+             int   (integer - bin/oct/hex/dec),
              float (float), integer/float arguments.
          min,max - allowed numeric range (for int/float) or string length range (for strings)
          delim (char) - alows multiple values in one parameter separated by <char>.
@@ -474,7 +475,7 @@ package.preload["Cmdl"]   = function(...)
   returns:
     error: nil, string:error message
     ok:    table:args
-             - table of parsed parameters in the form 
+             - table of parsed parameters in the form
                {tag={value[,valuem...]}}.
   --]]
   cmdl.parse = function(argv, argsd)
@@ -502,11 +503,11 @@ package.preload["Cmdl"]   = function(...)
       -- long arg test
       cmd, val = str:match"^(%-%-[^=%s]+)[=]?(.*)";
       -- short arg test
-      if not cmd and str:match"^%-[^%-]" then 
+      if not cmd and str:match"^%-[^%-]" then
         for _, sw in ipairs(shortParamNames) do
           sw = sw:gsub("([%-%?])","%%%1");
           if str:match("^"..sw) then
-            cmd, val = str:match("^("..sw..")(.*)$"); 
+            cmd, val = str:match("^("..sw..")(.*)$");
             val = val and #val > 0 and val or nil;
             break;
           end;
@@ -517,8 +518,8 @@ package.preload["Cmdl"]   = function(...)
       -- no result: others arg test
       if not argd and others then
         others = others[othercnt];
-        if others.multiple or (#others.params == 1 and others.params[1].delim) then 
-          return others, str; 
+        if others.multiple or (#others.params == 1 and others.params[1].delim) then
+          return others, str;
         end;
         othercnt = othercnt + 1;
         return others, str;
@@ -533,7 +534,7 @@ package.preload["Cmdl"]   = function(...)
           if result[sw] then
             err = argc;
             return true;
-          end;           
+          end;
         end;
       end;
       return false;
@@ -558,8 +559,8 @@ package.preload["Cmdl"]   = function(...)
           if val then -- no error during conversion - check min/max
             -- min/max given - check
             if ((paramd.min) and (val < paramd.min)) or
-               ((paramd.max) and (val > paramd.max)) then 
-              return; 
+               ((paramd.max) and (val > paramd.max)) then
+              return;
             end;
           end;
         elseif paramd.t == 'float' then -- parameter is float
@@ -567,8 +568,8 @@ package.preload["Cmdl"]   = function(...)
           if val then
             -- min/max given - check
             if ((paramd.min) and (val < paramd.min)) or
-               ((paramd.max) and (val > paramd.max)) then 
-              return; 
+               ((paramd.max) and (val > paramd.max)) then
+              return;
             end;
           end;
         else  -- parameter is string
@@ -579,13 +580,13 @@ package.preload["Cmdl"]   = function(...)
           if val then
             -- check for min/max string length
             if ((paramd.min) and (#val < paramd.min)) or
-               ((paramd.max) and (#val > paramd.max)) then 
-              return; 
+               ((paramd.max) and (#val > paramd.max)) then
+              return;
             end;
           end;
         end;
         -- check for allowed values list
-        if paramd.vals then 
+        if paramd.vals then
           for _, _val in pairs(paramd.vals) do
             if val == _val then return val; end;
           end;
@@ -664,10 +665,10 @@ package.preload["Cmdl"]   = function(...)
     local nxtargd, nxtval;
     while (argc <= #argv) do
       local argd, val;
-      argd, val, nxtargd, nxtval = nxtargd, nxtval; -- shift
+      argd, val, nxtargd, nxtval = nxtargd, nxtval; --luacheck: ignore
       -- expand next switch, if nessesary
       if not argd then argd, val = switch(argv[argc], argsd.others); end;
-      if blocked(argd) then 
+      if blocked(argd) then
         err = argc;
         break;
       end;
@@ -681,7 +682,7 @@ package.preload["Cmdl"]   = function(...)
         storeValue(argd, nil);
       elseif  argd.params then
         nxtargd, nxtval = switch(argv[argc+1]);
-        if not nxtargd then 
+        if not nxtargd then
           argc = argc + 1;
           storeValue(argd, argv[argc]);
         else
@@ -695,7 +696,7 @@ package.preload["Cmdl"]   = function(...)
     if err then  -- generate error message
       local msg = "";
       for i = 1, #argv do
-        if i == err then 
+        if i == err then
           msg = msg .. " [?> ".. argv[i] .." <?]";
         else
           msg = msg .. " " .. argv[i];
@@ -711,7 +712,7 @@ package.preload["Cmdl"]   = function(...)
     end;
     -- flatten result list for simple parameters...
     for _, _argd in ipairs(argsd) do
-      if result[_argd.tag] and (not _argd.params or (#_argd.params == 1 and 
+      if result[_argd.tag] and (not _argd.params or (#_argd.params == 1 and
           not (_argd.multiple or _argd.params[1].delim))) then
         result[_argd.tag] = result[_argd.tag][1] or true;
       end;
@@ -748,7 +749,7 @@ package.preload["Cmdl"]   = function(...)
             local t = param.lbl or param.t or 'str';
             --t = t:upper();
             cmdl = cmdl .. t;
-            if param.delim then 
+            if param.delim then
               cmdl = cmdl .. "{" .. param.delim .. t .. "}";
             end;
           end;
@@ -759,11 +760,11 @@ package.preload["Cmdl"]   = function(...)
       insert(result, {cmdl, arg.descr});
     end;
     local maxlen = 0;
-    for _, t in ipairs(result) do 
+    for _, t in ipairs(result) do
       if #t[1] > maxlen then maxlen = #t[1]; end;
     end;
-    for i, t in ipairs(result) do 
-      result[i] = t[1] .. string.rep(" ", maxlen - #t[1]) .. " " .. t[2]; 
+    for i, t in ipairs(result) do
+      result[i] = t[1] .. string.rep(" ", maxlen - #t[1]) .. " " .. t[2];
     end;
     return concat(result,"\n");
   end;
@@ -778,15 +779,15 @@ local class    = require "33log";
 local lfs      = require "lfs";
 local attributes, mkdir = lfs.attributes, lfs.mkdir;
 --
-local DIRSEP    = package.config:sub(1, 1);
+local DIRSEP    = package.config:sub(1, 1); --luacheck: ignore
 local WINDOWS   = DIRSEP == '\\' or nil;
 local MAKELEVEL = 0;
 local Make;
 --
 --=== [utils] ===============================================================
-local warning, warningMF, quit, quitMF, dprint, chdir, choose, pick, split, 
-      shell, execute, roTable, pairsByKeys, 
-      luaVersion, 
+local warning, warningMF, quit, quitMF, dprint, chdir, choose, pick, split,
+      shell, execute, roTable, pairsByKeys,
+      luaVersion,
       winapi, posix,
       ENV, PWD, NUMCORES;
 do
@@ -854,7 +855,7 @@ do
   end;
   
   function pick(a, b, ...)
-    if a ~= nil then 
+    if a ~= nil then
       return a;
     elseif select("#", ...) == 0 then
       return b;
@@ -907,10 +908,10 @@ do
   end;
   --
   ENV = setmetatable({}, {
-      __index = function(self,key)
+      __index = function(_, key)
         return os_getenv(key)
       end;
-      __newindex = function(self, key, value)
+      __newindex = function(_, key, value)
         local M = winapi or posix or quitMF("ENV[]: need winapi/posix for environment writes.");
         M.setenv(key, value);
       end;
@@ -923,10 +924,10 @@ end;
 
 --
 --=== [filename and path functions] =========================================
-local fn_temp,     fn_isabs,      fn_canonical,  fn_join,     fn_isFile,   
-      fn_isDir,    fn_defaultExt, fn_exists,     fn_forceExt, fn_splitext,  
-      fn_get_ext,  fn_splitpath,  fn_ensurePath, fn_basename, fn_path_lua,  
-      fn_cleanup,  fn_abs,        fn_rel,        fn_which,    fn_filetime,  
+local fn_temp,     fn_isabs,      fn_canonical,  fn_join,     fn_isFile,
+      fn_isDir,    fn_defaultExt, fn_exists,     fn_forceExt, fn_splitext,
+      fn_get_ext,  fn_splitpath,  fn_ensurePath, fn_basename, fn_path_lua,
+      fn_cleanup,  fn_abs,        fn_rel,        fn_which,    fn_filetime,
       fn_get_files, fn_files_from_mask, fn_get_directories;
 do
   --
@@ -1042,7 +1043,7 @@ do
     local _, p2 = fn_splitext(path);
     return p2;
   end;
-  
+
   function fn_splitpath(path)
     local i = #path;
     local ch = path:sub(i, i);
@@ -1056,7 +1057,7 @@ do
       return path:sub(1, i - 1), path:sub(i + 1);
     end;
   end;
- 
+
   function fn_ensurePath(path)
     if fn_isDir(path) then return; end;
     local dirs = split(path,"/");
@@ -1071,21 +1072,21 @@ do
     end;
     return path;
   end;
-  
+
   function fn_basename(path)
     local _, p2 = fn_splitpath(path);
     return p2;
   end;
-  
+
   function fn_path_lua(path)
     return path:gsub("\\", "/");
   end;
-  
+
   function fn_abs(path)
     if type(path) == "string" then path = {path}; end;
-    if fn_isabs(path[#path]) then 
+    if fn_isabs(path[#path]) then
       path = path[#path];
-    else  
+    else
       if not fn_isabs(path[1]) then insert(path, 1, PWD); end;
       path = concat(path, "/");
     end;
@@ -1184,16 +1185,16 @@ do -- [os & hardware detection] =============================================
   local version = t[1] or t[1/0] or t[f()==f()]
   
   The curious fact about this program is that it doesn't depend on anything
-  that can be changed. It does not use any standard library function or any 
+  that can be changed. It does not use any standard library function or any
   global variable  (as they may be withdrawn from sandboxed environment).
-  It does not rely on the name of "_ENV" upvalue (as it can be renamed when 
+  It does not rely on the name of "_ENV" upvalue (as it can be renamed when
   Lua is being built).
-  
+
   --]]--------------------------------------------------------------------
-  
+
   function luaVersion()
     local f = function() return function() end end;
-    local t = {nil, [false]  = '51', [true] = '52', [1/'-0'] = '53', [1] = 'JIT' };
+    local t = {nil, [false]  = '51', [true] = '52', [1/'-0'] = '53', [1] = 'JIT' }; --luacheck: ignore
     return t[1] or t[1/0] or t[f()==f()];
   end;
   --
@@ -1224,7 +1225,7 @@ do -- [error handling] ======================================================
       io_stderr:write(reason:format(...), '\n')
     end;
   end;
-  
+
   function warningMF(reason, ...)
     --if not Make or Make.options.verbose or Make.options.print_warnings then
       reason = reason or '?';
@@ -1240,15 +1241,15 @@ do -- [error handling] ======================================================
       );
     --end;
   end;
-  
+
   function quit(reason, ...)
     reason = reason or '?';
     reason = reason:format(...);
     if _DEBUG then
       local idx = select("#", ...);
       local lvl = (idx == 0) and 1 or select(idx, ...);
-      if type(lvl) ~= "number" then 
-        lvl = 2; 
+      if type(lvl) ~= "number" then
+        lvl = 2;
       else
         lvl = lvl + 1;
       end;
@@ -1262,7 +1263,7 @@ do -- [error handling] ======================================================
     io_stderr:write(reason, '\n');
     os_exit(2);
   end;
-  
+
   function quitMF(reason, ...)
     reason = reason or '?';
     local i = 0;
@@ -1284,13 +1285,13 @@ end;
 local cmdl = require "Cmdl";
 do
   cmdl.argsd = {
-    { tag = "build", 
-      cmd = {'-B', "--build-all"}, 
+    { tag = "build",
+      cmd = {'-B', "--build-all"},
       descr = "Unconditionally make all targets.",
       blockedby = {"printhelp", "printversion", "build"},
     },
-    { tag = "makefile", 
-      cmd = {"-f", "--makefile"}, 
+    { tag = "makefile",
+      cmd = {"-f", "--makefile"},
       descr = 'makefile to run. (default:"makefile.mk")',
       blockedby = {"printhelp", "printversion", "makefile"},
       params = { {
@@ -1300,13 +1301,13 @@ do
                },
       default = {MAKEFILENAME},
     },
-    { tag = "dont_execute", 
-      cmd = {'-n', "--just-print"}, 
-      descr = "Don't actually run any command; just print them.", 
+    { tag = "dont_execute",
+      cmd = {'-n', "--just-print"},
+      descr = "Don't actually run any command; just print them.",
       blockedby = {"printhelp", "printversion", "dont_execute"},
     },
-    { tag = "defines", 
-      cmd = {'-D', "--define"}, 
+    { tag = "defines",
+      cmd = {'-D', "--define"},
       descr = 'DEFINEs for compilation.',
       blockedby = {"printhelp", "printversion"},
       multiple = true;
@@ -1315,23 +1316,23 @@ do
                  }
                }
     },
-    { tag = "verbose", 
-      cmd = {'-v', "--verbose"}, 
-      descr = 'Be verbose. print commands executed, ...', 
+    { tag = "verbose",
+      cmd = {'-v', "--verbose"},
+      descr = 'Be verbose. print commands executed, ...',
       blockedby = {"printhelp", "printversion", "silent", "verbose"},
     },
-    { tag = "silent", 
-      cmd = {'-s', "--silent"}, 
-      descr = "Don't echo commands executed.", 
+    { tag = "silent",
+      cmd = {'-s', "--silent"},
+      descr = "Don't echo commands executed.",
       blockedby = {"printhelp", "printversion", "silent", "verbose"},
     },
-    { tag = "question", 
-      cmd = {'-q', "--question"}, 
-      descr = "Run no recipe; exit status says if up to date.", 
+    { tag = "question",
+      cmd = {'-q', "--question"},
+      descr = "Run no recipe; exit status says if up to date.",
       blockedby = {"printhelp", "printversion", "verbose", "build"},
     },
-    { tag = "jobs", 
-      cmd = {'-j', "--jobs"}, 
+    { tag = "jobs",
+      cmd = {'-j', "--jobs"},
       descr = 'Run N jobs parallel. (default: # of cores)',
       blockedby = {"printhelp", "printversion", "jobs"},
       params = {
@@ -1342,18 +1343,18 @@ do
                def = {tonumber(NUMCORES)},
                }
     },
-    { tag = "printversion", 
-      cmd = {"-V", "--version"}, 
-      descr = 'Display version information, then exit', 
-      blockedby = {"printhelp", "targets", "printversion"},
+    { tag = "printversion",
+      cmd = {"-V", "--version"},
+      descr = 'Display version information, then exit',
+      blockedby = {"printhelp", "targets"},
     },
-    { tag = "printhelp", 
-      cmd = {"-h", "--help"}, 
-      descr = "Display this help, then exit.", 
-      blockedby = {"build", "makefile", "dont_execute", "defines", "mode", 
-                   "import_needs", "export_needs", "use_needs", "aliases", 
-                   "verbose", "silent", "question", "jobs", 
-                   "targets", "printversion", "printhelp"},
+    { tag = "printhelp",
+      cmd = {"-h", "--help"},
+      descr = "Display this help, then exit.",
+      blockedby = {"build", "makefile", "dont_execute", "defines", "mode",
+                   "import_needs", "export_needs", "use_needs", "aliases",
+                   "verbose", "silent", "question", "jobs",
+                   "targets", "printversion"},
     },
     --
     others = {
@@ -1378,7 +1379,8 @@ local jobs_clear;      -- FORWARD();
 do
   --
   local function command_line(cmd)
-    local tmpfile, cmdline = fn_temp();
+    local tmpfile = fn_temp();
+    local cmdline;
     cmd = cmd:gsub("%s%s%s%s$", choose(WINDOWS, " > NUL", " > /dev/null"))
     if cmd:match '>%s*%S+$' then
       cmdline = cmd .. ' 2> ' .. tmpfile;
@@ -1387,7 +1389,7 @@ do
     end
     return cmdline, tmpfile;
   end;
-  
+
   local function execute_wrapper(cmd, callback)
     local cmdline, tmpfile = command_line(cmd);
     local ok, code = execute(cmdline);
@@ -1396,7 +1398,7 @@ do
     inf:close();
     os_remove(tmpfile);
   end;
-  
+
   job_execute = execute_wrapper;
   jobs_clear  = function() end;
   local n_threads, n_threads_forced = 1, false;
@@ -1407,7 +1409,7 @@ do
   local job_start; -- FORWARD(cmd)
   local jobs_wait; -- FORWARD()
   if WINDOWS then
-    if winapi then 
+    if winapi then
       local comspec = ENV.COMSPEC .. ' /c ';
       --
       function spawn(cmd)
@@ -1455,9 +1457,9 @@ do
       Outputs:insert{read=r, callback=callback, tmp=tmpfile}
       Processes:insert(p);
     end;
-    
+
     function jobs_wait(cmd, callback)
-      if #Processes == 0 then 
+      if #Processes == 0 then
         if cmd then job_start(cmd, callback); end;
         return;
       end;
@@ -1474,11 +1476,11 @@ do
       if winapi then p:close(); end
       os_remove(item.tmp);
     end;
-    
+
     function jobs_clear()
       while #Processes > 0 do jobs_wait(); end;
     end;
-    
+
     function job_execute(cmd, callback)
       if n_threads < 2 then
         execute_wrapper(cmd, callback)
@@ -1493,7 +1495,7 @@ do
       end;
     end;
   end;
-  
+
   concurrent_jobs = function(nj)
     local toi = tointeger or tonumber;
     nj = toi(nj);
@@ -1507,7 +1509,7 @@ do
       return nil, "overriden by command line.";
     end;
   end;
-  
+
 end;
 --
 local clMakeScript, MakeScript, clMake;
@@ -1529,11 +1531,11 @@ do -- [MakeScript Sandbox] ==================================================
   end;
   -- makescript filenames
   local scriptnames = {};
-  
+
   clMakeScript = class.base:subclass("MakeScript", {
     __call  = function(self, filename)
       local makefile, err = loadfile (filename, "t", self);
-      if makefile then 
+      if makefile then
         if setfenv then setfenv(makefile, self); end; -- lua 5.1
         insert(scriptnames, clMakeScript.MAKEFILENAME);
         clMakeScript.MAKEFILENAME = filename;
@@ -1552,28 +1554,28 @@ do -- [MakeScript Sandbox] ==================================================
         clMakeScript.MAKELEVEL = MAKELEVEL;
         clMakeScript.MAKEFILENAME = remove(scriptnames);
         if path ~= "" then chdir("<"); end;
-      else 
+      else
         quit(err, 2);
       end;
     end,
     include = function(filename)
       filename = fn_defaultExt(filename, INCLUDESCRIPTEXT);
       local makefilename;
-      local makefile, errmsg; 
+      local makefile, errmsg;
       for dir in includepath() do
         makefilename = fn_join(dir, filename);
         makefile, errmsg = loadfile (makefilename, "t", MakeScript);
         if makefile then break; end;
         if not errmsg:find("cannot open") then quit("make(): %s", errmsg); end;
       end;
-      if makefile then 
+      if makefile then
         if setfenv then setfenv(makefile, MakeScript); end; -- lua 5.1
         insert(scriptnames, clMakeScript.MAKEFILENAME);
         clMakeScript.MAKEFILENAME = makefilename;
         makefile();
         clMakeScript.MAKEFILENAME = remove(scriptnames);
       else
-        quitMF("make(): cant find include file '%s'.", filename); 
+        quitMF("make(): cant find include file '%s'.", filename);
       end;
     end,
     WINDOWS = WINDOWS,
@@ -1596,9 +1598,9 @@ do -- [MakeScript Sandbox] ==================================================
   --
   MakeScript = clMakeScript:singleton{};
   --
-  -- Extracts all but the suffix of each file name in names. 
-  -- If the file name contains a period, the basename is everything starting up to 
-  -- (and not including) the last period. Periods in the directory part are ignored. 
+  -- Extracts all but the suffix of each file name in names.
+  -- If the file name contains a period, the basename is everything starting up to
+  -- (and not including) the last period. Periods in the directory part are ignored.
   -- If there is no period, the basename is the entire file name. For example,
   --     `basename "src/foo.c src-1.0/bar hacks"`
   -- produces the result `"src/foo src-1.0/bar hacks"`.
@@ -1650,34 +1652,35 @@ local runMake; -- FORWARD()
 do -- [Make] ================================================================
   --
   clMake = class.base:subclass("Make", {
+    _VERSION    = VERSION,
     WINDOWS     = WINDOWS,
     Commandline = cmdl,
     utils       = roTable{
       ENV             = ENV,
-      chdir           = chdir, 
-      choose          = choose,  
-      pick            = pick,  
-      split           = split,   
-      shell           = shell, 
-      execute         = execute, 
-      which           = fn_which;
-      tempFinemane    = fn_temp,     
-      isabs           = fn_isabs,     
-      canonical       = fn_canonical,  
-      join            = fn_join, 
-      isFile          = fn_isFile,   
-      isDir           = fn_isDir,     
-      defaultExt      = fn_defaultExt, 
-      exists          = fn_exists, 
-      forceext        = fn_forceExt, 
-      splitext        = fn_splitext,  
-      get_ext         = fn_get_ext,    
+      chdir           = chdir,
+      choose          = choose,
+      pick            = pick,
+      split           = split,
+      shell           = shell,
+      execute         = execute,
+      which           = fn_which,
+      tempFinemane    = fn_temp,
+      isabs           = fn_isabs,
+      canonical       = fn_canonical,
+      join            = fn_join,
+      isFile          = fn_isFile,
+      isDir           = fn_isDir,
+      defaultExt      = fn_defaultExt,
+      exists          = fn_exists,
+      forceext        = fn_forceExt,
+      splitext        = fn_splitext,
+      get_ext         = fn_get_ext,
       splitpath       = fn_splitpath,
-      basename        = fn_basename, 
-      path_lua        = fn_path_lua,  
-      abs             = fn_abs,        
-      filetime        = fn_filetime, 
-      get_files       = fn_get_files, 
+      basename        = fn_basename,
+      path_lua        = fn_path_lua,
+      abs             = fn_abs,
+      filetime        = fn_filetime,
+      get_files       = fn_get_files,
       files_from_mask = fn_files_from_mask,
       get_directories = fn_get_directories,
     },
@@ -1687,21 +1690,21 @@ do -- [Make] ================================================================
     quitMF      = quitMF,
   }); clMake:protect();
 
-  clMake.__call  = function(self, cmd) 
+  clMake.__call  = function(self, cmd)
     local makefile, target;
     local function parseCommandline(cmd)
       local cmdl = require "Cmdl"
       local makefile, target;
       local options, msg = cmdl.parse(cmd);
-      if not options then 
-        print(("* error in parameter:%s"):format(msg)); 
+      if not options then
+        print(("* error in parameter:%s"):format(msg));
         os_exit(1);
       end;
       target = options.targets;
       clMake.options = options;
       --
       if options.printversion then -- -V, --version
-        print(VERSION);
+        print(MSG1);
         os_exit();
       end;
       if options.jobs then         -- -j, --jobs
@@ -1712,13 +1715,14 @@ do -- [Make] ================================================================
         options.makefile = fn_path_lua(fn_abs(fn_defaultExt(Make.options.makefile, SCRIPTEXT)));
         makefile = options.makefile;
       end;
-      if options.question then      -- -q, --question
+      if options.question then     -- -q, --question
         Make.options.silent = true;
       end;
       -- Late execution of help text display.
       -- This way, loaded toolchains may insert aditional command line switches
       -- BEFORE the help message becomes generated.
       if options.printhelp then    -- -h, --help
+        print(MSG1);
         print(USAGE:format(cmdl.help(1)));
         os_exit();
       end;
@@ -1736,13 +1740,13 @@ do -- [Make] ================================================================
       makefile = cmd[1];
     end;
     --
-    if not fn_isFile(makefile) then 
-      if not fn_isFile(makefile..SCRIPTEXT) then 
-        if fn_isDir(makefile) then 
-          makefile = fn_join(makefile, MAKEFILENAME); 
+    if not fn_isFile(makefile) then
+      if not fn_isFile(makefile..SCRIPTEXT) then
+        if fn_isDir(makefile) then
+          makefile = fn_join(makefile, MAKEFILENAME);
         end;
-        if not fn_isFile(makefile) then 
-          quit("make(): cant find '%s'.", makefile, 0); 
+        if not fn_isFile(makefile) then
+          quit("make(): cant find '%s'.", makefile, 0);
         end;
       else
         makefile = makefile..SCRIPTEXT;
@@ -1753,11 +1757,11 @@ do -- [Make] ================================================================
     --
     if MAKELEVEL == 0 then runMake(); end; -- do the job ...
   end;
-  
-  clMake.newTool = function(...) 
-    return class.Tool:new(...); 
+
+  clMake.newTool = function(...)
+    return class.Tool:new(...);
   end;
-  
+
   clMake.LUAVERSION = luaVersion();
   --
   Make = clMake:singleton();
@@ -1768,19 +1772,19 @@ end;
 --
 --=== [file & target handling] ==============================================
 local clSourceFile, clGeneratedFile, clTargetList;
-local GeneratedFiles, Targets; 
+local GeneratedFiles, Targets;
 do
-  local clTreeNode, clTarget, clFile, 
+  local clTreeNode, clTarget, clFile,
         target, default;
   local tSourceFileTimes = {}; -- caching file times.
   --
   -- generic make tree node.
   clTreeNode = class.base:subclass("TreeNode");
-  clTreeNode.needsBuild       = function(self)
+  clTreeNode.needsBuild       = function(self) --luacheck: ignore
     -- subclass has to redefine this method.
     error("clMaketreeNode:needsBuild(): abstract method called.");
   end;
-  
+
   clTreeNode.getBuildSequence = function(self, buildAll)
     local FileList = clTargetList:new();
     local PresList = clTargetList:new();
@@ -1807,14 +1811,14 @@ do
         end;
         node.from = nil;
       end;
-      if node.prerequisites then 
+      if node.prerequisites then
         for pre in node.prerequisites() do
-          if PresList:find(pre[1]) then 
+          if PresList:find(pre[1]) then
             if lvl >= pre.level then
               deduceLvl(pre, buildAll, lvl); --TODO
             end;
           else
-            PresList:add(pre); 
+            PresList:add(pre);
             deduceLvl(pre, buildAll, lvl); --TODO
           end;
         end;
@@ -1834,7 +1838,7 @@ do
           deduceLvl(node.needs, buildAll, lvl, node.bP22NeedsBuild);
         end;
       end;
-    end; 
+    end;
     --
     deduceLvl(self, buildAll);
     -- filling the level table. (higher levels will be executed 1st.)
@@ -1853,20 +1857,19 @@ do
       end;
       dprint("makeNodeQD(): %s nodes in %s level(s). %s..%s nodes/level", #FileList, #lvlTbl, _min, _max);
       -- print filenames ...
-      for i, t in ipairs(lvlTbl) do 
-        dprint("========== level %i", i); 
-        for _, n in ipairs(t) do dprint(n[1]); end; 
+      for i, t in ipairs(lvlTbl) do
+        dprint("========== level %i", i);
+        for _, n in ipairs(t) do dprint(n[1]); end;
       end;
       dprint("===================");
     end;
     --]]--
     return lvlTbl, #FileList;
   end;
-  
   --
   -- phony targets.
   clTarget = clTreeNode:subclass("Target", {
-    init  = function(self, label, deps, ...)
+    init  = function(self, label, deps)
       self[1] = label;
       if type(deps) == "table" then
         if type(deps.action) == "function" then
@@ -1877,30 +1880,28 @@ do
       return self;
     end,
   });
-  
+
   clTarget.add_deps   = function(self, deps)
     if self.deps == nil then
       self.deps = clTargetList:new();
     end;
-    
-    if class(deps, self.deps.__allowed) then 
+    if class(deps, self.deps.__allowed) then
       if not self.deps:find(deps[1]) then
         self.deps:add(deps);
         deps.target = true;
       else
         quitMF(("cant overwrite value '%s'"):format(deps[1]));
       end;
-    elseif type(deps) == "table" then  
-      for _, v in ipairs(deps) do 
+    elseif type(deps) == "table" then
+      for _, v in ipairs(deps) do
         self.deps:add(v, true);
         v.target = true;
       end;
     else
       quitMF("parameter needs to be a object or a list of objects.");
     end;
-
   end;
-  
+
   clTarget.needsBuild = function(self)
     --dprint("clTarget.needsBuild():                   %s =>", self[1]);
     local dirty, modtime = false, -1;
@@ -1919,37 +1920,36 @@ do
       return self;
     end,
   });
-  
-  clFile.needsBuild  = function(self)
+
+  clFile.needsBuild  = function(self) --luacheck: ignore
     -- subclass has to redefine this method.
     error("clFile:needsBuild(): abstract method called.", 2);
   end;
-  
+
   clFile.getFiletime = function(self)
     if not self._filetime then
       self._filetime = attributes(self[1], 'modification') or -1;
     end;
     return self._filetime;
   end;
-  
+
   clFile.exists      = function(self)
     return (self._filetime or self:getFiletime()) ~= -1;
   end;
-  
+
   clFile.mkdir       = function(self)
     if not self:exists() then
       fn_ensurePath(fn_splitpath(self[1]))
     end;
   end;
-  
+
   clFile.concat      = function(self) -- for compatibility with `clTargetList` filename concatenation.
     return self[1];
   end;
-  
+
   clFile.canonical   = function(self)
     return fn_canonical(self[1]);
   end;
-  
   --
   clSourceFile = clFile:subclass("SourceFile", {
     init = function(self, ...) -- ([<path>,]* filename)
@@ -1957,7 +1957,7 @@ do
       local fn = self[1];
       if fn:find("[%*%?]+") then return; end; -- wildcard detected.
       local time = tSourceFileTimes[fn];
-      if not time then 
+      if not time then
         time = clSourceFile.super.getFiletime(self);
         if time == -1 then quitMF("ERROR: cant find source file '%s'.", fn); end;
         tSourceFileTimes[fn] = time;
@@ -1966,11 +1966,11 @@ do
       return self;
     end;
   });
-  
+
   clSourceFile.getFiletime = function(self)
     return self._filetime;
   end;
-  
+
   clSourceFile.needsBuild  = function(self)
     --dprint("clSourceFile.needsBuild():               %s", self[1]);
     if self.bP21Done then return self.bDirty, self._nodeTime, not self.bDirty; end;
@@ -1991,7 +1991,7 @@ do
       return self;
     end,
   });
-  
+
   clGeneratedFile.needsBuild = function(self)
     if self.bP21Done then return self.bP21NeedsBuild, self._nodeTime, self.bClean; end;
     --
@@ -2002,8 +2002,8 @@ do
     local preTime,   presDirty,  presClean  = -1;
     local needsTime, needsDirty, needsClean = -1;
     --[[-- debug output
-    dprint("clGeneratedFile.needsBuild():            %s => %s", 
-      self[1], 
+    dprint("clGeneratedFile.needsBuild():            %s => %s",
+      self[1],
       self.bDirty and "?" or os.date("%Y/%m/%d %H:%M:%S", time)
     );
     --]]--
@@ -2018,19 +2018,19 @@ do
     self.bP21NeedsBuild = dirty and self.target or false;
     self.bP21Done = true;
     --[[-- debug output
-    dprint("clGeneratedFile.needsBuild():      %s %s => %s, %s", 
-      self.bDirty and "DIRTY" or "clean", 
-      self[1], 
-      self.bP21NeedsBuild, 
+    dprint("clGeneratedFile.needsBuild():      %s %s => %s, %s",
+      self.bDirty and "DIRTY" or "clean",
+      self[1],
+      self.bP21NeedsBuild,
       self._nodeTime == -1 and "" or os.date("%Y/%m/%d %H:%M:%S", self._nodeTime)
     );
     --]]--
     return self.bP21NeedsBuild, self._nodeTime, self.bClean;
   end;
-  
+
   clGeneratedFile.delete     = function(self)
     local depfile = fn_forceExt(self[1], ".d");
-    if self:exists() then 
+    if self:exists() then
       if not Make.options.quiet then print("DELETE " .. fn_canonical(self[1])); end;
       if not Make.options.dont_execute then os_remove(self[1]); end;
       if fn_exists(depfile) then
@@ -2052,7 +2052,7 @@ do
     end,
   });
 
-  clTargetList.init              = function(self, param, ...)
+  clTargetList.init              = function(self, param)
     self.__dir = {};
     if type(param) == "table" then self:add(param); end;
     return self;
@@ -2060,7 +2060,7 @@ do
 
   clTargetList.add               = function(self, item, isTarget)
     local kf = self.__key or 1;
-    if class(item, self.__allowed) then 
+    if class(item, self.__allowed) then
       if not self.__dir[item[kf]] then
         insert(self, item);
         self.__dir[item[kf]] = item;
@@ -2070,9 +2070,9 @@ do
       else
         error(("cant overwrite value '%s'"):format(item[kf]));
       end;
-    elseif type(item) == "table" then  
-      for _, v in ipairs(item) do 
-        self:add(v); 
+    elseif type(item) == "table" then
+      for _, v in ipairs(item) do
+        self:add(v);
         if isTarget then v.target = true; end;
       end;
     else
@@ -2096,33 +2096,33 @@ do
     self.bP21Done  = true;
     return dirty, time, clean;
   end;
-  
+
   clTargetList.new_sourcefile    = function(self, ...)
     local item = clSourceFile:new(...);
     if item then self:add(item); end;
     return item;
   end;
-  
+
   clTargetList.new_generatedfile = function(self, ...)
     local item = clGeneratedFile:new(...);
     if item then self:add(item); end;
     return item;
   end;
-  
+
   clTargetList.new_target        = function(self, ...)
     local item = clTarget:new(...);
     self:add(item);
     return item;
   end;
-  
-  clTargetList.canonical         = function(self, ...)
+
+  clTargetList.canonical         = function(self)
     local res = {};
     for f in self() do insert(res, f:canonical()); end;
     return concat(res," ");
   end;
-  
-  clTargetList.delete            = function(self, ...)
-    for f in self() do 
+
+  clTargetList.delete            = function(self)
+    for f in self() do
       if f:is("GeneratedFile") then f:delete(); end;
     end;
   end;
@@ -2136,7 +2136,7 @@ do
     Target:add_deps(deps);
     return Target;
   end;
-  
+
   function default(deps, ...)
     if select('#', ...) > 0 or deps == nil then quitMF("default(): parameter error. Did you use {}?"); end;
     return target("default", deps)
@@ -2159,7 +2159,7 @@ do
     __key  = 1,
     fields = class.StrList:new{"defines", "incdir", "libs", "libdir", "prerequisites"}, -- allowed fields.
   }); clNeeds:protect();
-  
+
   clNeeds.__call = function(self, ...) -- need definition and reading
     local p1, p2, unused = select(1, ...);
     if type(unused) ~= "nil" then quitMF("%s: wrong parameter.", self.__classname); end;
@@ -2197,8 +2197,8 @@ do
       insert(self, need);
       for fn, v in pairs(p1) do
         if fn ~= 1 then
-          if fn == "incdir" or fn == "libdir"  then 
-            v = fn_abs(v); 
+          if fn == "incdir" or fn == "libdir"  then
+            v = fn_abs(v);
           end;
           if self.fields:find(fn) then
             need[fn] = class.StrList:new(v);
@@ -2211,9 +2211,9 @@ do
       quitMF("%s: wrong parameter.", self.__classname);
     end;
   end;
-  
+
   Needs = clNeeds:new();
-  
+
   clMakeScript.define_need = Needs;
   clMake.Needs = Needs;
   --
@@ -2233,8 +2233,8 @@ do -- [make pass 2 + 3] =====================================================
       if targets == nil then
         if not Targets:find("default") then
           for node in GeneratedFiles() do
-            if node.type == "prog" or node.type == "slib" or node.type == "dlib" then 
-              MakeScript.default(node); 
+            if node.type == "prog" or node.type == "slib" or node.type == "dlib" then
+              MakeScript.default(node);
             end;
           end;
         end;
@@ -2243,14 +2243,14 @@ do -- [make pass 2 + 3] =====================================================
           for i = 1, #targets do
             local ts = targets[i];
             targets[i] = Targets:find(ts)
-            if not targets[i] then 
-              quit("make(): no target '%s' defined.", ts, 0); 
+            if not targets[i] then
+              quit("make(): no target '%s' defined.", ts, 0);
             end;
           end;
         else
           local startAt = Targets:find("default");
-          if not startAt or #startAt == 0 then 
-            quit("make(): no idea, what to make. (no progs or libs defined.)", 0); 
+          if not startAt or #startAt == 0 then
+            quit("make(): no idea, what to make. (no progs or libs defined.)", 0);
           end;
           targets = {startAt};
         end;
@@ -2266,7 +2266,7 @@ do -- [make pass 2 + 3] =====================================================
       return res;
     end;
     -- pass 3
-    local function makeNode(node) 
+    local function makeNode(node)
       local lvlTbl;
       local nodesdone, numnodes = 0;
       -- execute a nodes action and/or commandline.
@@ -2274,18 +2274,18 @@ do -- [make pass 2 + 3] =====================================================
         if node == nil then return; end;
         if not node.bP22NeedsBuild and not always_make then node.done = true; end;
         if node.done then return; end;
-        if node:is("Target") and node.bForce then 
-          node:action(); 
-        elseif node:is("TreeNode") then 
+        if node:is("Target") and node.bForce then
+          node:action();
+        elseif node:is("TreeNode") then
           if node.bP22NeedsBuild or always_make then
             nodesdone = nodesdone + 1;
             -- construct command line
             if node:is("GeneratedFile") and not node.command then
               node.tool:build_command(node);
             end;
-            if node.command and not quiet then 
+            if node.command and not quiet then
               if verbose then
-                print(node.command); 
+                print(node.command);
               else
                 local s = node.tool.CMD or fn_basename(fn_splitext(node.command:match("^(%S+)%s")));
                 s = s:upper() .. string.rep(" ", 7 - #s) .. " " .. fn_canonical(fn_rel(node[1]));
@@ -2293,11 +2293,11 @@ do -- [make pass 2 + 3] =====================================================
                 print(s);
               end;
             end;
-            if not just_print then 
-              if type(node.action) == "function" then 
+            if not just_print then
+              if type(node.action) == "function" then
                 if verbose then print("ACTION ".. node[1]); end;
-                if not node.action_done then 
-                  node:action(); 
+                if not node.action_done then
+                  node:action();
                   node.action_done = true;
                 end;
               end;
@@ -2313,7 +2313,7 @@ do -- [make pass 2 + 3] =====================================================
                   node.done = true;
                   node.bDirty = nil;
                 else
-                  job_execute(node.command, 
+                  job_execute(node.command,
                     function(ok, code, inf)
                       if verbose or not ok then
                         for l in inf:lines() do
@@ -2357,8 +2357,8 @@ do -- [tools & rules] =======================================================
   --
   clTool = class.base:subclass("Tool", {
     __call = function(self, ...)
-      if self.__default then 
-        return self.__default(...); 
+      if self.__default then
+        return self.__default(...);
       else
         error(("<class %s>: no default action."):format(self.__classname), 2);
       end;
@@ -2382,7 +2382,7 @@ do -- [tools & rules] =======================================================
       return tl;
     end;
   end;
-  
+
   function clTool:checkParam(...)
     if select("#", ...) ~= 1 then quitMF("%s(): only one parameter alowed. Did you use {}?", self[1]); end;
     local par = select(1, ...);
@@ -2397,9 +2397,9 @@ do -- [tools & rules] =======================================================
     if not self.__default then self.__default = self[what]; end;
   end;
   -- command line generation
-  function clTool:expand_DEFINES(TreeNode)
+  function clTool:expand_DEFINES(TreeNode) --luacheck: ignore
     local values = class.StrList:new();
-    values:add(TreeNode.defines); 
+    values:add(TreeNode.defines);
     values:add(Make.options.define);
     if #values == 0 then return ""; end;
     return "-D"..concat(values, " -D");
@@ -2410,7 +2410,7 @@ do -- [tools & rules] =======================================================
       --return TreeNode and TreeNode.__par[name] or self.__par[name];
       return TreeNode.__par[name] or self.__par[name];
     end;
-    
+
     local options = class.StrList:new();
     -- for non debug builds: strip debug infos from executables and dynlibs.
     local s = getField("SW_STRIP", TreeNode);
@@ -2420,37 +2420,37 @@ do -- [tools & rules] =======================================================
     if not MakeScript.NODEPS and d then options:add(d); end;
     -- optimize
     local o = getField("SW_OPTIMIZE", TreeNode);
-    if o then 
+    if o then
       if o:find("%*") then
         if MakeScript.OPTIMIZE then
-          options:add(o:gsub("%*", MakeScript.OPTIMIZE)); 
+          options:add(o:gsub("%*", MakeScript.OPTIMIZE));
         end;
       else
-        options:add(o); 
+        options:add(o);
       end;
     end;
     -- insert cflags.
     if TreeNode.cflags then options:add(TreeNode.cflags:concat()); end;
     -- insert include dirs
     if TreeNode.incdir then
-      for d in TreeNode.incdir() do
-        options:add("-I"..fn_canonical(d));
+      for dir in TreeNode.incdir() do
+        options:add("-I"..fn_canonical(dir));
       end;
     end;
     return concat(options, " ");
   end;
-  
-  function clTool:expand_LIBS(TreeNode)
+
+  function clTool:expand_LIBS(TreeNode) --luacheck: ignore
     local libs = class.StrList:new();
     for ld in TreeNode.libdir() do libs:add("-L"..fn_canonical(ld)); end;
     for l in TreeNode.libs()    do libs:add("-l"..fn_canonical(l));  end;
     return concat(libs, " ");
   end;
-  
-  function clTool:expand_SOURCES(TreeNode)
+
+  function clTool:expand_SOURCES(TreeNode) --luacheck: ignore
     local result = {};
     if class(TreeNode, "GeneratedFile") then
-      if class(TreeNode.deps, "File") then 
+      if class(TreeNode.deps, "File") then
         insert(result, fn_canonical(fn_rel(TreeNode.deps[1])));
       elseif class(TreeNode.deps, "TargetList") then
         for sf in TreeNode.deps() do
@@ -2466,7 +2466,7 @@ do -- [tools & rules] =======================================================
     return concat(result, " ");
   end;
   clTool.expand_SOURCE = clTool.expand_SOURCES;
-  function clTool:expand_OUTFILE(TreeNode)
+  function clTool:expand_OUTFILE(TreeNode) --luacheck: ignore
     if class(TreeNode, "GeneratedFile") then
       return fn_canonical(fn_rel(TreeNode[1]));
     else
@@ -2477,7 +2477,7 @@ do -- [tools & rules] =======================================================
   function clTool:expand_PROG(TreeNode)
     return TreeNode.__par["prog"] or self.__par["prog"];
   end;
-  
+
   function clTool:build_command(TreeNode)
     local function getField(name)
       local par = TreeNode.__par;
@@ -2521,7 +2521,7 @@ do -- [tools & rules] =======================================================
       end;
       return function() return func(p); end;
     end;
-    
+
     if TreeNode.func then
       TreeNode.func = genfunc(TreeNode.func, TreeNode.deps, TreeNode);
       cmdln = cmdln:gsub("%$SOURCES", self:expand_SOURCES(TreeNode)):gsub("%$OUTFILE", self:expand_OUTFILE(TreeNode)):gsub("%$%u+", "");
@@ -2565,8 +2565,8 @@ do -- [tools & rules] =======================================================
             list = {mask};
           end;
           if list then
-            for _, n in ipairs(list) do
-              sources:new_sourcefile(n);
+            for _, i in ipairs(list) do
+              sources:new_sourcefile(i);
             end;
           else
             for _, ext in ipairs(exts) do
@@ -2631,14 +2631,14 @@ do -- [tools & rules] =======================================================
               if f == "prerequisites" then
                 for pre in n[f]() do
                   local tgt = Targets:find(pre);
-                  if tgt then 
+                  if tgt then
                     for node in tgt.deps() do
                       if not sources.prerequisites:find(node[1]) then
                         sources.prerequisites:add(node);
                       end;
                     end;
-                  else 
-                    quitMF("no target '%s' defined.", pre); 
+                  else
+                    quitMF("no target '%s' defined.", pre);
                   end;
                 end;
               else
@@ -2650,26 +2650,26 @@ do -- [tools & rules] =======================================================
       end;
       local function pnode(need)
         for _, n in ipairs(need) do
-          if type(n) == "string" then 
+          if type(n) == "string" then
             pstring(n);
           elseif class(n, "TreeNode") then
             sources.needs:add(n);
           elseif class(n, "TargetList") then
             pnode(n)
           else
-            quitMF("invalid parameter type in 'needs'."); 
+            quitMF("invalid parameter type in 'needs'.");
           end;
         end;
       end;
-      if type(ParValue) == "string" then 
+      if type(ParValue) == "string" then
         pstring(ParValue);
       elseif class(ParValue, "TreeNode") then
         pnode({ParValue});
       elseif class(ParValue, "TargetList") then
         pnode(ParValue);
       elseif class(ParValue) then
-        quitMF("invalid parameter type in 'needs'."); 
-      elseif type(ParValue) == "table" then 
+        quitMF("invalid parameter type in 'needs'.");
+      elseif type(ParValue) == "table" then
         pnode(ParValue);
       end;
       par.needs = nil;
@@ -2700,17 +2700,17 @@ do -- [tools & rules] =======================================================
           if class(ts, "TreeNode") then
             sources.prerequisites:add(ts);
           else
-            quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
+            quitMF("make(): parameter 'deps' needs to be a target or a list of targets.");
           end;
         end;
       else
-        quitMF("make(): parameter 'deps' needs to be a target or a list of targets."); 
+        quitMF("make(): parameter 'deps' needs to be a target or a list of targets.");
       end;
       par.deps = nil;
     end;
     -- prerequisites = ...
     ParValue = getField("prerequisites");
-    if ParValue then 
+    if ParValue then
       if type(ParValue) == "string" then ParValue = split(ParValue); end;
       if type(ParValue) == "table" then
         for _, ts in ipairs(ParValue) do
@@ -2719,7 +2719,7 @@ do -- [tools & rules] =======================================================
           sources.prerequisites:add(t[1]); --get real need name in case of alias.
         end;
       else
-        quitMF("make(): parameter 'prerequisites' needs to be a string or a list of strings."); 
+        quitMF("make(): parameter 'prerequisites' needs to be a string or a list of strings.");
       end;
       par.prerequisites = nil;
     end;
@@ -2829,17 +2829,18 @@ do -- [tools & rules] =======================================================
     par[1] = nil;
     return result;
   end;
-  
+
   Rule:add_action("create");
   function Rule:action_define(...)
     local par = self:checkParam(...);
     local toolName = par.name or "tool";
     par.name = nil;
     local tool = clTool:new{toolName, __par = par};
+    --tool._singletarget = not not (toolName:find(".prog$") or toolName:find(".dlib$") or toolName:find(".slib$"));
     tool.__default = function(...) return self.action_create(tool, ...); end;
     return tool;
   end;
-  
+
   Rule:add_action("define");
   clMakeScript.rule = Rule;
   --
@@ -2850,7 +2851,7 @@ do -- [tools & rules] =======================================================
       action = choose(WINDOWS, "copy", "cp") .. " $SOURCES $OUTFILE",
     }
   };
-  
+
   function File:action_copy(...)
     local par = self:checkParam(...);
     local sources = self:getSources(par);
@@ -2867,14 +2868,14 @@ do -- [tools & rules] =======================================================
     end;
     return targets;
   end;
-  
+
   File:add_action("copy");
   clMakeScript.file = File;
   --
   Group = class.Tool:new{
     SRC_EXT = ".*";
   };
-  
+
   function Group:action_create(...)
     local par = self:checkParam(...);
     if not par.inputs then
@@ -2889,7 +2890,7 @@ do -- [tools & rules] =======================================================
     for n in pairs(par) do quitMF("%s(): parameter '%s' not processed.", self[1] or "rule", n); end;
     return res;
   end;
-  
+
   Group:add_action("create");
   clMakeScript.group = Group;
   --
@@ -2897,13 +2898,13 @@ end;
 --
 do -- [special targets] =====================================================
   --
-  local function action_clean(self)
+  local function action_clean()
     for f in GeneratedFiles() do
       if not f.target then f:delete(); end;
     end;
   end;
 
-  local function action_CLEAN(self)
+  local function action_CLEAN()
     GeneratedFiles:delete();
   end;
   --
