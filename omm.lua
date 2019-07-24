@@ -1129,6 +1129,7 @@ do
   
   function fn_get_files(path, pat, recurse, files)
     files = files or {};
+    pat = "^"..pat:gsub('%.','%%.'):gsub('%*','.*')..'$';
     for file in lfs.dir(path) do
       if file ~= '.' and file ~= '..' then
         if path ~= '.' then file = fn_join(path, file) end;
@@ -1147,7 +1148,7 @@ do
     local path, pat = fn_splitpath(mask);
     if path == '' then path = '.' end;
     -- turn shell-style wildcard into Lua regexp
-    pat = "^"..pat:gsub('%.','%%.'):gsub('%*','.*')..'$';
+    --pat = "^"..pat:gsub('%.','%%.'):gsub('%*','.*')..'$';
     return fn_get_files(path, pat, recurse);
   end;
   
