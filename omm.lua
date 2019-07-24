@@ -2014,7 +2014,7 @@ do
     if self.needs         then needsDirty, needsTime, needsClean = self.needs:needsBuild();         end;
     --
     self._nodeTime = max(fileTime, depTime, preTime, needsTime);
-    dirty = dirty or depsDirty or presDirty or needsDirty or (fileTime < self._nodeTime);
+    dirty = dirty or depsDirty or presDirty or needsDirty or (fileTime < max(depTime, preTime, needsTime));
     self.bClean = clean and depsClean and needsClean and fileTime >= self._nodeTime;
     self.bP21NeedsBuild = dirty and self.target or false;
     self.bP21Done = true;
