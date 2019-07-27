@@ -19,14 +19,6 @@ local TEMPDIR      = TEMPDIR.."/"..LUA_VERSION
 local CFLAGS       = CFLAGS .. " -fomit-frame-pointer"
 if M32 then CFLAGS = CFLAGS .. " -march=i686" end
 
-if not make.utils.isDir("luaJIT20") then
-  if git then
-    git.checkout{"luaJIT20", "https://github.com/Fuzzlix/LUA5.git"}
-  elseif svn then
-    svn.checkout{"luaJIT20", "https://github.com/Fuzzlix/LUA5/tree/JIT20"}
-  end;
-end
---
 local MINILUA = make.utils.which("luajit") or 
   c99.prog {"minilua", src="minilua.c", base=JIT_HOSTDIR, odir=TEMPDIR, incdir=JIT_SRC_DIR};
 
@@ -58,7 +50,7 @@ local FOLDDEF = rule {"lj_folddef.h", base=JIT_SRC_DIR, prog=BUILDVM, odir=TEMPD
   src="lj_opt_fold.c", 
   action = "$PROG -m folddef -o $OUTFILE $SOURCES"
 }
-local LJDEPS  = group {FFDEF, BCDEF, RECDEF, LIBDEF, FOLDDEF}
+local LJDEPS  = {FFDEF, BCDEF, RECDEF, LIBDEF, FOLDDEF}
 local VMDEF   = rule {"vmdef.lua", base=JIT_SRC_DIR, prog=BUILDVM, odir=TEMPDIR,
   src="lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c \z
       lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c", 
@@ -78,18 +70,19 @@ local SLIBOBJ = c99 {"luajits_*", src="ljamalg", base=JIT_SRC_DIR, odir=TEMPDIR,
   needs=LJDEPS, from="luajits:defines", cflags=CFLAGS
 }
 --
-local LUALIB  = c99.slib {'lua51', odir=LUA_IDIR, inputs={SLIBOBJ, LJ_VM}}
-local LUADLL  = c99.dlib {'lua51', odir=LUA_BIN, inputs={DLIBOBJ, LJ_VM}}
-local LUAEXE  = c99.prog {'luajit', odir=LUA_BIN, inputs={LUAOBJ, LUAICON, LUADLL}, needs="windows"}
+local LUALIB  = file {inputs=c99.slib {'lua51', odir=TEMPDIR, inputs={SLIBOBJ, LJ_VM}}, odir=LUA_IDIR};
+local LUADLL  = file {inputs=c99.dlib {'lua51', odir=TEMPDIR, inputs={DLIBOBJ, LJ_VM}}, odir=LUA_BIN};
+local LUAEXE  = file {inputs=c99.prog {'luajit', odir=TEMPDIR, inputs={LUAOBJ, LUAICON, LUADLL}, needs="windows"}, odir=LUA_BIN};
 --
 local LUAINC  = file {src="lua.h luaconf.h lualib.h lauxlib.h", base=JIT_SRC_DIR, odir=LUA_IDIR}
 local LUADOC  = file {src="*", base=JIT_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/luajit/doc"}
 local LUAJIT  = file {src="*.lua", base=JIT_SRC_DIR.."/jit", odir=LUA_CDIR.."/jit", inputs=VMDEF}
 --
-local LUA     = {LUAEXE, LUADLL, LUALIB, LUAINC, LUAJIT, LUADOC};
+local LUA     = {LUAEXE, LUADLL, LUAINC, LUAJIT, LUADOC};
 
-target("luajit", LUA);
+target("luajit", {LUA, LUALIB});
 default(LUA);
+--default(LUALIB);
 --
 define_need{'luajit',  -- luajit, dynamically linked libs
   libs          = "lua51", 
