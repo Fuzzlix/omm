@@ -4,12 +4,11 @@ if luaglue == nil then -- not loaded yet?
 
   --- **glue(par)**.
   --  `par`: _table_.
-  --       `.source`:  _string_.  source file name
-  --       `.outfile`: _string_.  output file name
+  --       `[1]`:      _string_.  output file name
+  --       `.src`:     _string_.  source file name
   --       `.loader`:  _string_.  loader executable name.
   --       `.force`:   _boolean_. dont verify loader signature.
   --                         usefull for blanc loader exe without attached lua prog.
-  --       All other fields are ignored.
   local function glue(par)
     local GLUESIG = "%%glue:L";
     --local LUACSIG = "\x1bLuaR";
