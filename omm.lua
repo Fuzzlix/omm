@@ -29,7 +29,7 @@ Required 3rd party modules:
 --_DEBUG = true;
 --
 local VERSION = "1.0";
-local MSG1 = "omm 1.0.1 (2019/07/24)\n  A lua based extensible build engine.\n";
+local MSG1 = "omm 1.0.2 (2019/08/04)\n  A lua based extensible build engine.\n";
 local USAGE   = [=[
 Usage: OMM [options] [target[,...]]
 
