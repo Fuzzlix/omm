@@ -1,6 +1,9 @@
 --
 -- gnu toolchain - 32bit targets.
 --
+--luacheck: globals _DEBUG make rule cc c99 cpp res
+--luacheck: globals M32 OPTIMIZE MAINSCRIPTDIR
+--
 M32 = true;
 OPTIMIZE = OPTIMIZE or "O2";
 --
@@ -26,7 +29,7 @@ local function getIncludes(depFileName)
   local t = {};   -- remember filenames
   -- prepare result. remove duplicate filenames.
   for _, fn in ipairs(txt) do
-    fn = fnabs(fn);
+    fn = fnabs{MAINSCRIPTDIR, fn};
     if not t[fn] then
       insert(res, fn);
       t[fn] = true;
@@ -62,27 +65,27 @@ c99.dlib = rule.define {name="c99.dlib",
   SW_STRIP      = "-s",
   action        = "gcc -shared -m32 -std=gnu99 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE"
 };
-c99.slib = rule.define {name="c99.slib", 
-  ext           = ".o",    -- default extension for source files
-  outext        = ".a", -- output extension for typ="slib"
-  action        = "ar rcus $OUTFILE $SOURCES"
+c99.slib = rule.define {name="c99.slib",
+  ext    = ".o", -- default extension for source files
+  outext = ".a", -- output extension for typ="slib"
+  action = "ar rc $OUTFILE $SOURCES"
 };
 --
-cc       = rule.define {name="cc",      
+cc       = rule.define {name="cc",
   ext         = ".c",    -- default extension for source files
   outext      = ".o",    -- output extension for typ="obj"
   SW_DEPGEN   = "-MMD",  -- compiler switch for dependency file generation.
   SW_OPTIMIZE = "-*";
   action      = "gcc -c -m32 $OPTIONS $DEFINES $SOURCE $LIBS -o $OUTFILE"
 };
-cc.prog  = rule.define {name="cc.prog", 
+cc.prog  = rule.define {name="cc.prog",
   ext = ".c",   -- default extension for source files
   outext = choose(WINDOWS, ".exe", ""),    -- output extension for typ="prog"
   SW_OPTIMIZE = "-*";
   SW_STRIP = "-s",
   action = "gcc -m32 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE"
 };
-cc.dlib  = rule.define {name="cc.dlib", 
+cc.dlib  = rule.define {name="cc.dlib",
   ext = ".c",   -- default extension for source files
   outext = choose(WINDOWS, ".dll", ".so"), -- output extension for typ="dlib"
   SW_OPTIMIZE = "-*";
@@ -90,9 +93,9 @@ cc.dlib  = rule.define {name="cc.dlib",
   action = "gcc -shared -m32 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE"
 };
 cc.slib  = rule.define {name="cc.slib",
-  ext = ".o",    -- default extension for source files
+  ext    = ".o", -- default extension for source files
   outext = ".a", -- output extension for typ="slib"
-  action = "ar rcus $OUTFILE $SOURCES"
+  action = "ar rc $OUTFILE $SOURCES"
 };
 --
 cpp      = rule.define {name="cpp",
@@ -117,9 +120,9 @@ cpp.dlib = rule.define {name="cpp.dlib",
   action = "g++ -shared -m32 $OPTIONS $DEFINES $SOURCES $LIBS -o $OUTFILE"
 };
 cpp.slib = rule.define {name="cpp.slib",
-  ext = ".o",    -- default extension for source files
+  ext    = ".o", -- default extension for source files
   outext = ".a", -- output extension for typ="slib"
-  action = "ar rcus $OUTFILE $SOURCES"
+  action = "ar rc $OUTFILE $SOURCES"
 };
 --
 res      = rule.define {name="res",

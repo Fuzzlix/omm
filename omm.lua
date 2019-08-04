@@ -1516,7 +1516,6 @@ end;
 local clMakeScript, MakeScript, clMake;
 do -- [MakeScript Sandbox] ==================================================
   --
-  local mainScriptDir; -- location of mainscript.
   local includepath;
   do -- includepath = package.path ...
     includepath = split(fn_path_lua(package.path):gsub("%?%.lua",""),";");
@@ -1543,8 +1542,8 @@ do -- [MakeScript Sandbox] ==================================================
         local path = fn_splitpath(filename);
         if path ~= "" then chdir(path); end;
         clMakeScript.PWD = PWD;
-        if not mainScriptDir then
-          mainScriptDir = PWD;
+        if not clMakeScript.MAINSCRIPTDIR then
+          clMakeScript.MAINSCRIPTDIR = PWD;
           insert(includepath, 1, PWD);
           includepath = class.StrList:new(includepath) -- cleans up double entries
         end;
@@ -1994,7 +1993,9 @@ do
   });
 
   clGeneratedFile.needsBuild = function(self)
-    if self.bP21Done then return self.bP21NeedsBuild, self._nodeTime, self.bClean; end;
+    if self.bP21Done then
+      return self.bP21NeedsBuild, self._nodeTime, self.bClean;
+    end;
     --
     local fileTime = self:getFiletime();
     local clean = self:exists();
@@ -2083,7 +2084,9 @@ do
   end;
 
   clTargetList.needsBuild        = function(self)
-    if self.bP21Done then return self.bDirty, self._nodeTime, self.bClean; end;
+    if self.bP21Done then
+      return self.bDirty, self._nodeTime, self.bClean;
+    end;
     local time, dirty, clean = -1, false, true;
     for n in self() do
       local d, mt, c = n:needsBuild();
@@ -2346,7 +2349,9 @@ do -- [make pass 2 + 3] =====================================================
     local target = getTarget();
     while target do
       if not quiet then print("TARGET " .. target[1]); end;
-      if needsBuild(target) then makeNode(target); end;
+      if needsBuild(target) then
+        makeNode(target);
+      end;
       target = getTarget();
     end;
   end;

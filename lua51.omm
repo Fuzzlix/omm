@@ -26,7 +26,7 @@ if not make.utils.isDir("lua-5.1") then
 end
 --
 local LUAICON = res {"lua51", src="icon", base=LUA_SRC_DIR, odir=TEMPDIR} -- icon resources
-local LUAICN2 = res {"luac51",src="icon", base=LUA_SRC_DIR, odir=TEMPDIR} -- icon resources
+local LUAICN2 = res {"luac51", src="icon", base=LUA_SRC_DIR, odir=TEMPDIR} -- icon resources
 local LUA_C   = c99 {"lua51", src="lua", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51:defines", cflags=CFLAGS}         -- lua program c source
 local LUAC_C  = c99 {"lua51", src="luac print", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51s:defines", cflags=CFLAGS} -- luac program c source
 local LIB_C   = c99 {"lua51_s", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua51s:defines", cflags=CFLAGS}   -- static lib c source

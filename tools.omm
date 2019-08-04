@@ -1,7 +1,7 @@
 --
 -----------------------------------------------------------------------------------------------
 --
-for _, m in ipairs(make.utils.get_directories("modules")) do
+for _, m in ipairs(make.utils.get_directories("tools")) do
   if make.utils.isFile(m..".omm") then
     make(m);
   end;

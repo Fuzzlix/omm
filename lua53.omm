@@ -5,8 +5,8 @@ if not WINDOWS then quit("We are not running on Windows?") end;
 -----------------------------------------------------------------------------------------------
 --
 LUAROOT     = LUAROOT or PWD
-LUA_BIN     = LUA_BIN or LUAROOT.."/_install"               -- install dir
-TEMPDIR     = TEMPDIR or LUAROOT.."/tmp"                    -- dir for intermediate files
+LUA_BIN     = LUA_BIN or LUAROOT.."/_install"         -- install dir
+TEMPDIR     = TEMPDIR or LUAROOT.."/tmp"              -- dir for intermediate files
 
 local LUA_VERSION = "53"
 local LUA_IDIR    = LUA_BIN.."/include/"..LUA_VERSION -- dir for headers and static libs
@@ -27,21 +27,21 @@ end
 --
 local LUAICON = res {"lua53icon", src="icon", base=LUA_SRC_DIR, odir=TEMPDIR} -- icon resources
 local LUAICN2 = res {"luac53icon",src="icon", base=LUA_SRC_DIR, odir=TEMPDIR} -- icon resources
-local LUA_C   = c99 {"lua53", src="lua", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua53:defines", cflags=CFLAGS}       -- lua program c source
-local LUAC_C  = c99 {"luac53", src="luac", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua53s:defines", cflags=CFLAGS}     -- luac program c source
+local LUA_C   = c99 {"lua53", src="lua", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua53:defines", cflags=CFLAGS}         -- lua program c source
+local LUAC_C  = c99 {"luac53", src="luac", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua53s:defines", cflags=CFLAGS}      -- luac program c source
 local LIB_C   = c99 {"lua53_s_*", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua53s:defines", cflags=CFLAGS} -- static lib c source
 local DLL_C   = c99 {"lua53_d_*", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua53:defines", cflags=CFLAGS}  -- dynamic lib c source
 --
-local LUALIB  = c99.slib {'lua53', odir=LUA_IDIR, inputs=LIB_C}                     -- static lua runtime lib
-local LUADLL  = c99.dlib {'lua53', odir=LUA_BIN, inputs=DLL_C}                      -- dynamic lua runtime lib
-local LUAEXE  = c99.prog {'lua53', odir=LUA_BIN, inputs={LUA_C, LUAICON, LUADLL}}   -- lua executable
-local LUAC    = c99.prog {'luac53', odir=LUA_BIN, inputs={LUAC_C, LUAICN2, LUALIB}} -- luac executable
+local LUALIB  = file {inputs=c99.slib {'lua53', odir=TEMPDIR, inputs=LIB_C},odir=LUA_IDIR};                     -- static lua runtime lib
+local LUADLL  = file {inputs=c99.dlib {'lua53', odir=TEMPDIR, inputs=DLL_C},odir=LUA_BIN};                      -- dynamic lua runtime lib
+local LUAEXE  = file {inputs=c99.prog {'lua53', odir=TEMPDIR, inputs={LUA_C, LUAICON, LUADLL}},odir=LUA_BIN};   -- lua executable
+local LUAC    = file {inputs=c99.prog {'luac53', odir=TEMPDIR, inputs={LUAC_C, LUAICN2, LUALIB}},odir=LUA_BIN}; -- luac executable
 --
 local LUAINC  = file {src="lua.h lua.hpp luaconf.h lualib.h lauxlib.h", base=LUA_SRC_DIR, odir=LUA_IDIR}
 local LUADOC  = file {src="*", base=LUA_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/lua53/doc"}
 local LUAETC  = file {src="*.ico", base=LUA_SRC_DIR.."/../etc", odir=LUA_IDIR}
 --
-local LUA = group {LUAEXE, LUAC, LUAINC, LUADOC, LUAETC}
+local LUA = {LUAEXE, LUAC, LUAINC, LUADOC, LUAETC}
 
 target("lua53", LUA)
 

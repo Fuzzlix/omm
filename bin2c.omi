@@ -6,10 +6,9 @@ if bin2c == nil then -- not loaded yet?
   
   --- **b2c(par)**.
   --  `par`: _table_.
-  --       `.source`:  _string_. source file name
-  --       `.outfile`: _string_. output file name
+  --       `[1]`:     _string_. output file name
+  --       `src`:     _string_. source file name
   --       `.command`: _string_. c command dealing with the binary data `"B1"`.
-  --       All other fields are ignored.
   local function b2c(par)
     local function msg(s, ...) return ("bin2c(): "..s):format(...); end;
     -- read sourcefile

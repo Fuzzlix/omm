@@ -1,0 +1,69 @@
+--- makefile for lua-5.3
+--
+if not WINDOWS then quit("We are not running on Windows?") end;
+--
+-----------------------------------------------------------------------------------------------
+--
+LUAROOT     = LUAROOT or PWD
+LUA_BIN     = LUA_BIN or LUAROOT.."/_install"         -- install dir
+TEMPDIR     = TEMPDIR or LUAROOT.."/tmp"              -- dir for intermediate files
+
+local LUA_VERSION = "54"
+local LUA_IDIR    = LUA_BIN.."/include/"..LUA_VERSION -- dir for headers and static libs
+local LUA_CDIR    = LUA_BIN.."/lib/"..LUA_VERSION     -- dir for c modules
+local LUA_LDIR    = LUA_BIN.."/lua"                   -- dir for lua modules 
+local LUA_ETC_DIR = LUA_BIN.."/etc"                   -- dir for documentation, tests, etc.
+local LUA_SRC_DIR = LUAROOT.."/lua-5.4/src"           -- where are the lua sources.
+
+local lua_core = "lapi lcode lctype ldebug ldo ldump lfunc lgc llex lmem lobject \z
+                  lopcodes lparser lstate lstring ltable ltm lundump lvm lzio lauxlib \z
+                  lbaselib lcorolib ldblib liolib lmathlib loslib lstrlib ltablib \z
+                  lutf8lib loadlib linit";
+
+if not make.utils.isDir("lua-5.4") then
+  svn.checkout{"lua-5.4", "https://github.com/Fuzzlix/lua5/branches/54"}
+end
+--
+local LUAICON = res {"lua54icon", src="icon", base=LUAROOT.."/etc", odir=TEMPDIR} -- icon resources
+local LUAICN2 = res {"luac54icon",src="icon", base=LUAROOT.."/etc", odir=TEMPDIR} -- icon resources
+local LUA_C   = c99 {"lua54", src="lua", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua54:defines", cflags=CFLAGS}         -- lua program c source
+local LUAC_C  = c99 {"luac54", src="luac", base=LUA_SRC_DIR, odir=TEMPDIR, from="lua54s:defines", cflags=CFLAGS}      -- luac program c source
+local LIB_C   = c99 {"lua54_s_*", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua54s:defines", cflags=CFLAGS} -- static lib c source
+local DLL_C   = c99 {"lua54_d_*", src=lua_core, base=LUA_SRC_DIR, odir=TEMPDIR, from="lua54:defines", cflags=CFLAGS}  -- dynamic lib c source
+--
+local LUALIB  = file {inputs=c99.slib {'lua54', odir=TEMPDIR, inputs=LIB_C},odir=LUA_IDIR};                     -- static lua runtime lib
+local LUADLL  = file {inputs=c99.dlib {'lua54', odir=TEMPDIR, inputs=DLL_C},odir=LUA_BIN};                      -- dynamic lua runtime lib
+local LUAEXE  = file {inputs=c99.prog {'lua54', odir=TEMPDIR, inputs={LUA_C, LUAICON, LUADLL}},odir=LUA_BIN};   -- lua executable
+--local LUAC    = file {inputs=c99.prog {'luac54', odir=TEMPDIR, inputs={LUAC_C, LUAICN2, LUALIB}},odir=LUA_BIN}; -- luac executable
+--
+local LUAINC  = file {src="lua.h lua.hpp luaconf.h lualib.h lauxlib.h", base=LUA_SRC_DIR, odir=LUA_IDIR}
+local LUADOC  = file {src="*", base=LUA_SRC_DIR.."/../doc", odir=LUA_ETC_DIR.."/lua54/doc"}
+--
+local LUA = {LUAEXE, LUAINC, LUADOC, LUAC}
+
+target("lua54", LUA)
+
+default(LUA)
+--
+define_need{'lua54',  -- lua54, dynamically linked libs
+  libs          = "lua54", 
+  incdir        = LUA_IDIR, 
+  defines       = "LUA_BUILD_AS_DLL", 
+  libdir        = LUA_BIN .. " " .. LUA_IDIR,
+  prerequisites = "lua54",
+  LUAVERSION    = LUA_VERSION
+};
+
+define_need{'lua54s', -- lua54, statically linked libs
+  libs          = "lua54.a",
+  incdir        = LUA_IDIR, 
+  --defines       = "LUA_COMPAT_MODULE", 
+  libdir        = LUA_IDIR,
+  prerequisites = "lua54",
+  LUAVERSION    = LUA_VERSION
+};
+--
+-- aliases for compiling the modules
+make.Needs "lua=lua54"   
+make.Needs "luas=lua54s" 
+
